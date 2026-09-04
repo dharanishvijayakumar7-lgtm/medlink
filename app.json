@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Medlink",
-    "slug": "Medlink",
+    "slug": "medlink",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -37,6 +37,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c6d4e6f8-5e0f-4471-afdc-c21218871796"
+      }
+    },
+    "owner": "r3ddyyys-team"
   }
 }
