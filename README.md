@@ -1,56 +1,150 @@
-# Welcome to your Expo app 👋
+# MedLink — Mobile App (Part 1)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Smartphone companion to the MedLink LiveKit voice agent. Voice-based AI healthcare
+triage for rural India (SIH 2026).
 
-## Get started
+Expo SDK 57 / React Native 0.86 / expo-router on the front, FastAPI + PostgreSQL
+on the back.
 
-1. Install dependencies
+> **Part 1 has no authentication.** No Firebase, no OTP, no passwords. Patients are
+> identified by a shareable `MED-XXXXXX` code; doctors just type their name. Real
+> auth is Part 3.
 
-   ```bash
-   npm install
-   ```
+---
 
-2. Start the app
+## Architecture
 
-   ```bash
-   npx expo start
-   ```
+The app opens on a **role select** screen and branches into two navigation stacks
+that never share a screen:
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+src/app/
+  index.tsx              Role select — "Continue as Patient" / "Continue as Doctor"
+  patient/               ── Patient stack ──────────────────────────────
+    _layout.tsx            teal header, PatientSessionProvider
+    index.tsx              gate: returning patient -> home, new -> register
+    register.tsx           identity capture (name, age, gender, phone, village, language)
+    home.tsx               MED-ID + copy, action tiles, high-risk banner
+    symptom-check.tsx      6-step guided Q&A -> triage entry
+    record.tsx             read-only triage history + every doctor note
+    facilities.tsx         seeded sub-centres / PHCs / hospitals
+    sos.tsx                112 + live GPS fix to read out on the call
+  doctor/                ── Doctor stack ───────────────────────────────
+    _layout.tsx            indigo header, DoctorSessionProvider
+    index.tsx              identity (name + specialization)
+    queue.tsx              patients with recent triage, newest first
+    high-risk.tsx          flagged worklist
+    search.tsx             open any record by MED-ID
+    patient/[code].tsx     full record + add note (flag / refer)
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Session handling differs by role, on purpose:
 
-### Other setup steps
+| | Patient | Doctor |
+|---|---|---|
+| Stored | `{unique_code, phone}` in AsyncStorage | in memory only |
+| Survives app restart | yes — skips registration | no — identify again |
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+Everything else lives in PostgreSQL.
 
-## Learn more
+---
 
-To learn more about developing your project with Expo, look at the following resources:
+## Database
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+This app uses its **own** database, `medlink_app`.
 
-## Join the community
+The LiveKit voice agent owns the separate, Alembic-managed `medlink` database
+(`users`, `calls`, `triage_assessments`, …). Nothing here writes to it — keep it
+that way, and keep `DATABASE_URL` pointed at `medlink_app`.
 
-Join our community of developers creating universal apps.
+Tables (created automatically on server start):
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```
+patients             id, unique_code "MED-XXXXXX", name, age, gender, phone,
+                     village, preferred_language, created_at
+doctors              id, name, specialization, created_at
+facilities           id, name, type, area_label            (15 seeded rows)
+triage_entries       id, patient_id, summary, answers JSONB, created_at
+consultation_notes   id, patient_id, doctor_id, note_text, is_high_risk,
+                     high_risk_reason, referred_to_facility_id, created_at
+```
+
+---
+
+## Running it
+
+### 1. Backend
+
+```bash
+cd backend
+python -m venv .venv
+.venv/Scripts/python.exe -m pip install -r requirements.txt   # Windows
+# source .venv/bin/activate && pip install -r requirements.txt  # macOS / Linux
+
+cp .env.example .env        # then fill in your PostgreSQL password
+createdb -U postgres medlink_app
+
+.venv/Scripts/python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+`--host 0.0.0.0` matters: a phone on your Wi-Fi needs to reach the API, not just
+localhost.
+
+Tables are created and facilities seeded on startup — the seed is idempotent, so
+restarts never duplicate rows.
+
+Interactive API docs: <http://localhost:8000/docs>
+
+### 2. App
+
+```bash
+npm install
+npx expo start
+```
+
+The app finds the API automatically by reusing the Metro host the device already
+connected to (`http://<your-lan-ip>:8000`). Override only if the API is elsewhere:
+
+```bash
+EXPO_PUBLIC_API_URL=http://192.168.1.50:8000 npx expo start
+```
+
+Location and clipboard need a development build (`npx expo run:android`) or Expo
+Go — both are covered by the `expo-location` config plugin in `app.json`.
+
+---
+
+## API
+
+| Method | Path | Purpose |
+|---|---|---|
+| `POST` | `/patients` | create patient, returns `unique_code` |
+| `GET` | `/patients/{unique_code}` | full record: patient + triage + notes |
+| `POST` | `/patients/{unique_code}/triage` | add a symptom check |
+| `POST` | `/patients/{unique_code}/notes` | doctor note (+ high-risk flag, + referral) |
+| `GET` | `/triage/recent` | doctor queue, newest triage first |
+| `GET` | `/triage/high-risk` | flagged worklist |
+| `GET` | `/facilities` | facility finder + referral dropdown |
+| `POST` | `/doctors` | ephemeral doctor session |
+| `GET` | `/health` | liveness |
+
+Two deliberate details:
+
+- `/triage/recent` lists only patients who have submitted a symptom check.
+  `/triage/high-risk` lists everyone a doctor flagged, **including** patients with
+  no triage yet — a flagged patient belongs on the worklist either way.
+- A `high_risk_reason` sent without `is_high_risk` is discarded, so the reason can
+  never outlive the flag.
+
+Patient codes are `MED-` plus six random digits, unique-constrained, with insert
+retried on collision.
+
+---
+
+## Not in Part 1
+
+Firebase/OTP/any real auth, doctor credential verification, LiveKit
+teleconsultation, closed-loop referral status tracking (Part 1 referrals are a
+stored note only), offline sync, push/SMS, ABDM/FHIR, multilingual UI (the
+preferred language is captured but nothing is translated yet), live queue
+wait-times, facility quality metrics.

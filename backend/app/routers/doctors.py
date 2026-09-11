@@ -1,0 +1,23 @@
+"""Ephemeral doctor sessions.
+
+Part 1 has no authentication: this records who is using the app so notes can
+be attributed. Credential verification arrives in Part 3.
+"""
+
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models import Doctor
+from app.schemas import DoctorCreate, DoctorOut
+
+router = APIRouter(prefix="/doctors", tags=["doctors"])
+
+
+@router.post("", response_model=DoctorOut, status_code=status.HTTP_201_CREATED)
+def create_doctor(payload: DoctorCreate, db: Session = Depends(get_db)) -> Doctor:
+    doctor = Doctor(**payload.model_dump())
+    db.add(doctor)
+    db.commit()
+    db.refresh(doctor)
+    return doctor
