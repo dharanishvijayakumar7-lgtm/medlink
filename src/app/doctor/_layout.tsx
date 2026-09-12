@@ -25,6 +25,7 @@ export default function DoctorLayout() {
         />
         <Stack.Screen name="high-risk" options={{ title: "High-risk worklist" }} />
         <Stack.Screen name="search" options={{ title: "Search patient" }} />
+        <Stack.Screen name="stock" options={{ title: "Facility stock" }} />
         <Stack.Screen name="patient/[code]" options={{ title: "Patient record" }} />
       </Stack>
     </DoctorSessionProvider>

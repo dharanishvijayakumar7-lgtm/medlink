@@ -1,0 +1,54 @@
+"""Additive column migrations for tables that already exist.
+
+``Base.metadata.create_all`` creates missing tables but never alters existing
+ones, so the columns Part 2 adds to ``triage_entries`` and ``doctors`` are
+applied here instead. Every statement is idempotent and runs after create_all,
+so a fresh database and an upgraded one end up identical.
+
+If the schema ever grows beyond additive changes, move to Alembic - the voice
+agent's database already uses it.
+"""
+
+from sqlalchemy import text
+from sqlalchemy.engine import Engine
+
+# (table, column, column definition)
+ADDED_COLUMNS: list[tuple[str, str, str]] = [
+    ("triage_entries", "status", "VARCHAR(20) NOT NULL DEFAULT 'WAITING'"),
+    ("triage_entries", "source", "VARCHAR(20) NOT NULL DEFAULT 'app'"),
+    ("doctors", "facility_id", "INTEGER REFERENCES facilities(id)"),
+]
+
+# (index name, table, column) - mirrors index=True on the mapped columns.
+ADDED_INDEXES: list[tuple[str, str, str]] = [
+    ("ix_triage_entries_status", "triage_entries", "status"),
+    ("ix_triage_entries_source", "triage_entries", "source"),
+]
+
+
+def sync_schema(engine: Engine) -> list[str]:
+    """Apply the additive migrations. Returns the columns that were added."""
+    added: list[str] = []
+
+    with engine.begin() as connection:
+        for table, column, definition in ADDED_COLUMNS:
+            existing = connection.execute(
+                text(
+                    "SELECT 1 FROM information_schema.columns "
+                    "WHERE table_name = :table AND column_name = :column"
+                ),
+                {"table": table, "column": column},
+            ).first()
+            if existing:
+                continue
+            connection.execute(
+                text(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+            )
+            added.append(f"{table}.{column}")
+
+        for index_name, table, column in ADDED_INDEXES:
+            connection.execute(
+                text(f"CREATE INDEX IF NOT EXISTS {index_name} ON {table} ({column})")
+            )
+
+    return added

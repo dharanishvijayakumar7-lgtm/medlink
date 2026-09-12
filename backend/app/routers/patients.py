@@ -1,79 +1,47 @@
 """Patient identity, record retrieval, triage entries and doctor notes."""
 
-import secrets
-
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import ConsultationNote, Doctor, Facility, Patient, TriageEntry
+from app.queries import create_patient as allocate_patient, load_patient, queue_position
 from app.schemas import (
     ConsultationNoteCreate,
     ConsultationNoteOut,
     PatientCreate,
     PatientOut,
     PatientRecord,
+    ReferralOut,
     TriageEntryCreate,
     TriageEntryOut,
 )
 
 router = APIRouter(prefix="/patients", tags=["patients"])
 
-# Number of times to retry when a generated code collides with an existing one.
-CODE_ATTEMPTS = 10
-
-
-def _new_code() -> str:
-    """A human-shareable patient ID: MED- followed by 6 random digits."""
-    return f"MED-{secrets.randbelow(1_000_000):06d}"
-
-
-def _load_patient(db: Session, unique_code: str) -> Patient:
-    patient = (
-        db.query(Patient)
-        .options(
-            selectinload(Patient.triage_entries),
-            selectinload(Patient.notes).selectinload(ConsultationNote.doctor),
-            selectinload(Patient.notes).selectinload(
-                ConsultationNote.referred_to_facility
-            ),
-        )
-        .filter(Patient.unique_code == unique_code.strip().upper())
-        .first()
-    )
-    if patient is None:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND, f"No patient found with ID {unique_code}"
-        )
-    return patient
-
 
 @router.post("", response_model=PatientOut, status_code=status.HTTP_201_CREATED)
 def create_patient(payload: PatientCreate, db: Session = Depends(get_db)) -> Patient:
     """Capture a patient's identity and allocate their unique MedLink ID."""
-    for _ in range(CODE_ATTEMPTS):
-        patient = Patient(unique_code=_new_code(), **payload.model_dump())
-        db.add(patient)
-        try:
-            db.commit()
-        except IntegrityError:
-            # The code was taken between generation and insert; try another one.
-            db.rollback()
-            continue
-        db.refresh(patient)
-        return patient
-
-    raise HTTPException(
-        status.HTTP_503_SERVICE_UNAVAILABLE,
-        "Could not allocate a unique patient ID. Please try again.",
-    )
+    return allocate_patient(db, **payload.model_dump())
 
 
 @router.get("/{unique_code}", response_model=PatientRecord)
-def get_patient(unique_code: str, db: Session = Depends(get_db)) -> Patient:
-    """Full record: demographics + triage history + every doctor note."""
-    return _load_patient(db, unique_code)
+def get_patient(unique_code: str, db: Session = Depends(get_db)) -> PatientRecord:
+    """Full record: demographics, triage, notes, referrals and queue position."""
+    patient = load_patient(db, unique_code, with_history=True)
+    record = PatientRecord.model_validate(patient)
+    record.queue_position = queue_position(db, patient.id)
+    return record
+
+
+@router.get("/{unique_code}/referrals", response_model=list[ReferralOut])
+def list_patient_referrals(
+    unique_code: str, db: Session = Depends(get_db)
+) -> list[ReferralOut]:
+    """The patient-facing referral tracker, newest first."""
+    patient = load_patient(db, unique_code, with_history=True)
+    return [ReferralOut.model_validate(referral) for referral in patient.referrals]
 
 
 @router.post(
@@ -85,7 +53,7 @@ def add_triage_entry(
     unique_code: str, payload: TriageEntryCreate, db: Session = Depends(get_db)
 ) -> TriageEntry:
     """Save one completed symptom check against the patient's record."""
-    patient = _load_patient(db, unique_code)
+    patient = load_patient(db, unique_code)
     answers = [answer.model_dump() for answer in payload.answers]
     summary = payload.summary or "; ".join(
         f"{answer['question']}: {answer['answer']}" for answer in answers
@@ -107,7 +75,7 @@ def add_consultation_note(
     unique_code: str, payload: ConsultationNoteCreate, db: Session = Depends(get_db)
 ) -> ConsultationNote:
     """A doctor adds a note, optionally flagging high-risk and/or a referral."""
-    patient = _load_patient(db, unique_code)
+    patient = load_patient(db, unique_code)
 
     if db.get(Doctor, payload.doctor_id) is None:
         raise HTTPException(

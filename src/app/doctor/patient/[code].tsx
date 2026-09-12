@@ -2,6 +2,9 @@ import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-rou
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { FacilityPicker } from "@/components/facility-picker";
+import { ReferralCard } from "@/components/referral-card";
+import { TRIAGE_STATUS_META } from "@/components/queue-card";
 import {
   Badge,
   Button,
@@ -14,16 +17,36 @@ import {
   SectionTitle,
   TextField,
 } from "@/components/ui";
-import { api, ConsultationNote, Facility, PatientRecord, TriageEntry } from "@/lib/api";
+import {
+  api,
+  ConsultationNote,
+  Facility,
+  PatientRecord,
+  Referral,
+  ReferralStatus,
+  TriageEntry,
+} from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useDoctorSession } from "@/lib/doctor-session";
 import { colors, radius, spacing } from "@/lib/theme";
 
+/** Statuses a doctor can move a referral to, beyond the one it already has. */
+const NEXT_STATUSES: ReferralStatus[] = ["CONFIRMED", "COMPLETED", "NO_SHOW"];
+
 function TriageCard({ entry }: { entry: TriageEntry }) {
   const [expanded, setExpanded] = useState(false);
+  const statusMeta = TRIAGE_STATUS_META[entry.status];
+  const fromPhone = entry.source === "voice_call";
 
   return (
     <Card>
+      <View style={styles.badgeRow}>
+        <Badge label={statusMeta.short} tone={statusMeta.tone} />
+        <Badge
+          label={fromPhone ? "📞 PHONE CALL" : "📱 APP"}
+          tone={fromPhone ? "warning" : "neutral"}
+        />
+      </View>
       <Text style={styles.timestamp}>{formatDateTime(entry.created_at)}</Text>
       <Text style={styles.summary}>{entry.summary}</Text>
 
@@ -38,11 +61,13 @@ function TriageCard({ entry }: { entry: TriageEntry }) {
         </View>
       ) : null}
 
-      <Pressable onPress={() => setExpanded(!expanded)} hitSlop={8}>
-        <Text style={styles.toggle}>
-          {expanded ? "Hide answers" : `Show all ${entry.answers.length} answers`}
-        </Text>
-      </Pressable>
+      {entry.answers.length > 0 ? (
+        <Pressable onPress={() => setExpanded(!expanded)} hitSlop={8}>
+          <Text style={styles.toggle}>
+            {expanded ? "Hide answers" : `Show all ${entry.answers.length} answers`}
+          </Text>
+        </Pressable>
+      ) : null}
     </Card>
   );
 }
@@ -81,78 +106,6 @@ function NoteCard({ note }: { note: ConsultationNote }) {
   );
 }
 
-function FacilityPicker({
-  facilities,
-  selectedId,
-  onSelect,
-}: {
-  facilities: Facility[];
-  selectedId: number | null;
-  onSelect: (id: number | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const selected = facilities.find((facility) => facility.id === selectedId) ?? null;
-
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>Refer to facility (optional)</Text>
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => setOpen(!open)}
-        style={styles.pickerTrigger}
-      >
-        <Text
-          style={[styles.pickerValue, !selected && styles.pickerPlaceholder]}
-          numberOfLines={1}
-        >
-          {selected ? selected.name : "No referral"}
-        </Text>
-        <Text style={styles.pickerChevron}>{open ? "⌃" : "⌄"}</Text>
-      </Pressable>
-
-      {open ? (
-        <View style={styles.pickerList}>
-          <Pressable
-            onPress={() => {
-              onSelect(null);
-              setOpen(false);
-            }}
-            style={styles.pickerRow}
-          >
-            <View style={[styles.radio, selectedId === null && styles.radioOn]} />
-            <Text style={styles.pickerRowText}>No referral</Text>
-          </Pressable>
-
-          {facilities.map((facility) => (
-            <Pressable
-              key={facility.id}
-              onPress={() => {
-                onSelect(facility.id);
-                setOpen(false);
-              }}
-              style={styles.pickerRow}
-            >
-              <View
-                style={[styles.radio, selectedId === facility.id && styles.radioOn]}
-              />
-              <View style={styles.pickerRowBody}>
-                <Text style={styles.pickerRowText}>{facility.name}</Text>
-                <Text style={styles.pickerRowMeta}>
-                  {facility.type} - {facility.area_label}
-                </Text>
-              </View>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-
-      <Text style={styles.hint}>
-        Part 1 referrals are a note only - status tracking comes later.
-      </Text>
-    </View>
-  );
-}
-
 export default function DoctorPatientDetail() {
   const router = useRouter();
   const { code } = useLocalSearchParams<{ code: string }>();
@@ -166,10 +119,17 @@ export default function DoctorPatientDetail() {
   const [noteText, setNoteText] = useState("");
   const [highRisk, setHighRisk] = useState(false);
   const [riskReason, setRiskReason] = useState("");
-  const [facilityId, setFacilityId] = useState<number | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [savingNote, setSavingNote] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
+  const [savedNote, setSavedNote] = useState(false);
+
+  const [referralFacilityId, setReferralFacilityId] = useState<number | null>(null);
+  const [referralNotes, setReferralNotes] = useState("");
+  const [savingReferral, setSavingReferral] = useState(false);
+  const [referralError, setReferralError] = useState<string | null>(null);
+  const [busyReferral, setBusyReferral] = useState<number | null>(null);
+
+  const [startingCall, setStartingCall] = useState(false);
 
   useEffect(() => {
     if (!doctor) router.replace("/doctor");
@@ -188,44 +148,117 @@ export default function DoctorPatientDetail() {
     }
   }, [code]);
 
+  const loadFacilities = useCallback(async () => {
+    try {
+      setFacilities(await api.getFacilities());
+    } catch {
+      setFacilities([]);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       load();
-    }, [load]),
+      loadFacilities();
+    }, [load, loadFacilities]),
   );
 
-  useEffect(() => {
-    api.getFacilities().then(setFacilities).catch(() => setFacilities([]));
-  }, []);
+  async function startCall() {
+    if (!doctor || !record) return;
+    setStartingCall(true);
+    setError(null);
+    try {
+      const consultation = await api.startConsultation(record.unique_code, doctor.id);
+      router.push({
+        pathname: "/call",
+        params: {
+          token: consultation.token,
+          serverUrl: consultation.livekit_url,
+          roomName: consultation.room_name,
+          peerName: record.name,
+          consultationId: String(consultation.id),
+          role: "doctor",
+        },
+      });
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "Could not start the consultation.",
+      );
+    } finally {
+      setStartingCall(false);
+    }
+  }
 
   async function saveNote() {
     if (!doctor || !record) return;
     if (!noteText.trim()) {
-      setSaveError("Please write the note before saving.");
+      setNoteError("Please write the note before saving.");
       return;
     }
 
-    setSaveError(null);
-    setSaving(true);
+    setNoteError(null);
+    setSavingNote(true);
     try {
       await api.addConsultationNote(record.unique_code, {
         doctor_id: doctor.id,
         note_text: noteText.trim(),
         is_high_risk: highRisk,
         high_risk_reason: highRisk ? riskReason.trim() || null : null,
-        referred_to_facility_id: facilityId,
       });
       setNoteText("");
       setHighRisk(false);
       setRiskReason("");
-      setFacilityId(null);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2500);
+      setSavedNote(true);
+      setTimeout(() => setSavedNote(false), 2500);
       await load();
     } catch (caught) {
-      setSaveError(caught instanceof Error ? caught.message : "Could not save the note.");
+      setNoteError(
+        caught instanceof Error ? caught.message : "Could not save the note.",
+      );
     } finally {
-      setSaving(false);
+      setSavingNote(false);
+    }
+  }
+
+  async function createReferral() {
+    if (!doctor || !record) return;
+    if (referralFacilityId === null) {
+      setReferralError("Choose the facility you are referring to.");
+      return;
+    }
+
+    setReferralError(null);
+    setSavingReferral(true);
+    try {
+      await api.createReferral({
+        patient_unique_code: record.unique_code,
+        doctor_id: doctor.id,
+        to_facility_id: referralFacilityId,
+        notes: referralNotes.trim() || null,
+      });
+      setReferralFacilityId(null);
+      setReferralNotes("");
+      await load();
+    } catch (caught) {
+      setReferralError(
+        caught instanceof Error ? caught.message : "Could not create the referral.",
+      );
+    } finally {
+      setSavingReferral(false);
+    }
+  }
+
+  async function setReferralStatus(referral: Referral, status: ReferralStatus) {
+    setBusyReferral(referral.id);
+    try {
+      await api.updateReferralStatus(referral.id, status);
+      await load();
+    } catch (caught) {
+      setReferralError(
+        caught instanceof Error ? caught.message : "Could not update the referral.",
+      );
+    } finally {
+      setBusyReferral(null);
     }
   }
 
@@ -254,6 +287,9 @@ export default function DoctorPatientDetail() {
           <View style={styles.badgeRow}>
             <Badge label={record.unique_code} tone="doctor" />
             {flagged ? <Badge label="HIGH RISK" tone="danger" /> : null}
+            {record.queue_position !== null ? (
+              <Badge label={`#${record.queue_position} IN QUEUE`} tone="warning" />
+            ) : null}
           </View>
           <Text style={styles.name}>{record.name}</Text>
           <Text style={styles.meta}>
@@ -262,16 +298,26 @@ export default function DoctorPatientDetail() {
           <Text style={styles.meta}>
             Phone {record.phone} - speaks {record.preferred_language}
           </Text>
-          <Text style={styles.meta}>
-            Registered {formatDateTime(record.created_at)}
-          </Text>
         </Card>
       ) : null}
 
+      <Button
+        title="Start video consultation"
+        onPress={startCall}
+        loading={startingCall}
+        tone="success"
+      />
+      <Text style={styles.callHint}>
+        Opens a room on the same LiveKit project as the voice agent. The patient
+        sees a Join prompt on their home screen.
+      </Text>
+
       <SectionTitle>Add consultation note</SectionTitle>
       <Card>
-        {saveError ? <ErrorBanner message={saveError} /> : null}
-        {saved ? <Text style={styles.savedNotice}>{"✓"}  Note saved</Text> : null}
+        {noteError ? <ErrorBanner message={noteError} /> : null}
+        {savedNote ? (
+          <Text style={styles.savedNotice}>{"✓"}  Note saved</Text>
+        ) : null}
 
         <TextField
           label="Note"
@@ -297,19 +343,65 @@ export default function DoctorPatientDetail() {
           />
         ) : null}
 
-        <FacilityPicker
-          facilities={facilities}
-          selectedId={facilityId}
-          onSelect={setFacilityId}
-        />
+        <Button title="Save note" onPress={saveNote} loading={savingNote} tone="doctor" />
+      </Card>
 
+      <SectionTitle>Refer to a facility</SectionTitle>
+      <Card>
+        {referralError ? <ErrorBanner message={referralError} /> : null}
+        <FacilityPicker
+          label="Refer to"
+          facilities={facilities}
+          selectedId={referralFacilityId}
+          onSelect={setReferralFacilityId}
+          emptyLabel="Choose a facility"
+          hint="The patient can follow this referral's status on their record."
+        />
+        <TextField
+          label="Referral note (optional)"
+          value={referralNotes}
+          onChangeText={setReferralNotes}
+          placeholder="Why you are referring, what they should ask for"
+          multiline
+        />
         <Button
-          title="Save note"
-          onPress={saveNote}
-          loading={saving}
+          title="Create referral"
+          onPress={createReferral}
+          loading={savingReferral}
           tone="doctor"
         />
       </Card>
+
+      {record && record.referrals.length > 0 ? (
+        <>
+          <SectionTitle>Referrals</SectionTitle>
+          {record.referrals.map((referral) => (
+            <ReferralCard key={referral.id} referral={referral} audience="doctor">
+              <View style={styles.statusActions}>
+                {NEXT_STATUSES.filter((status) => status !== referral.status).map(
+                  (status) => (
+                    <Pressable
+                      key={status}
+                      accessibilityRole="button"
+                      disabled={busyReferral === referral.id}
+                      onPress={() => setReferralStatus(referral, status)}
+                      style={({ pressed }) => [
+                        styles.statusButton,
+                        pressed && { opacity: 0.8 },
+                        busyReferral === referral.id && { opacity: 0.5 },
+                      ]}
+                    >
+                      <Text style={styles.statusButtonText}>
+                        {status === "NO_SHOW" ? "No show" : status.toLowerCase()}
+                      </Text>
+                    </Pressable>
+                  ),
+                )}
+              </View>
+            </ReferralCard>
+          ))}
+        </>
+      ) : null}
 
       <SectionTitle>Triage history</SectionTitle>
       {record && record.triage_entries.length > 0 ? (
@@ -333,6 +425,13 @@ export default function DoctorPatientDetail() {
 const styles = StyleSheet.create({
   name: { fontSize: 22, fontWeight: "700", color: colors.text },
   meta: { fontSize: 14, color: colors.muted },
+  callHint: {
+    fontSize: 12,
+    color: colors.faint,
+    textAlign: "center",
+    lineHeight: 17,
+    marginTop: -spacing.xs,
+  },
 
   timestamp: { fontSize: 12, fontWeight: "600", color: colors.faint },
   summary: { fontSize: 16, color: colors.text, lineHeight: 22, fontWeight: "500" },
@@ -383,51 +482,26 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
 
-  field: { gap: spacing.xs },
-  label: { fontSize: 14, fontWeight: "600", color: colors.text },
-  hint: { fontSize: 12, color: colors.muted },
-
-  pickerTrigger: {
+  statusActions: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
     gap: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    minHeight: 48,
+    flexWrap: "wrap",
+    marginTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.md,
   },
-  pickerValue: { flex: 1, fontSize: 16, color: colors.text },
-  pickerPlaceholder: { color: colors.faint },
-  pickerChevron: { fontSize: 18, color: colors.muted, fontWeight: "700" },
-
-  pickerList: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    overflow: "hidden",
+  statusButton: {
+    borderWidth: 1.5,
+    borderColor: colors.doctor,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
   },
-  pickerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+  statusButtonText: {
+    color: colors.doctor,
+    fontWeight: "700",
+    fontSize: 13,
+    textTransform: "capitalize",
   },
-  pickerRowBody: { flex: 1, gap: 2 },
-  pickerRowText: { fontSize: 15, color: colors.text, fontWeight: "500" },
-  pickerRowMeta: { fontSize: 12, color: colors.muted },
-  radio: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: colors.border,
-  },
-  radioOn: { borderColor: colors.doctor, borderWidth: 6 },
 });

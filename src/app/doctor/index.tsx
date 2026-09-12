@@ -1,7 +1,8 @@
-import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
+import { FacilityPicker } from "@/components/facility-picker";
 import {
   Button,
   Card,
@@ -10,7 +11,7 @@ import {
   Screen,
   TextField,
 } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, Facility } from "@/lib/api";
 import { useDoctorSession } from "@/lib/doctor-session";
 import { colors, spacing } from "@/lib/theme";
 
@@ -36,8 +37,25 @@ export default function DoctorIdentity() {
     "General Medicine",
   );
   const [customSpecialization, setCustomSpecialization] = useState("");
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [facilityId, setFacilityId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const loadFacilities = useCallback(async () => {
+    try {
+      setFacilities(await api.getFacilities());
+    } catch {
+      // Not fatal: a doctor can start a session without picking a facility.
+      setFacilities([]);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadFacilities();
+    }, [loadFacilities]),
+  );
 
   const resolved =
     specialization === "Other" ? customSpecialization.trim() : specialization ?? "";
@@ -58,6 +76,7 @@ export default function DoctorIdentity() {
       const doctor = await api.createDoctor({
         name: name.trim(),
         specialization: resolved,
+        facility_id: facilityId,
       });
       setDoctor(doctor);
       router.replace("/doctor/queue");
@@ -104,6 +123,14 @@ export default function DoctorIdentity() {
             autoCapitalize="words"
           />
         ) : null}
+        <FacilityPicker
+          label="Your facility (optional)"
+          facilities={facilities}
+          selectedId={facilityId}
+          onSelect={setFacilityId}
+          emptyLabel="Not attached to a facility"
+          hint="Sets the default facility whose stock you keep up to date."
+        />
       </View>
 
       <Button

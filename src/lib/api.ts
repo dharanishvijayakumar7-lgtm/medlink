@@ -60,11 +60,23 @@ async function readError(response: Response): Promise<string> {
   return `Request failed (${response.status})`;
 }
 
-function post<T>(path: string, body: unknown): Promise<T> {
-  return request<T>(path, { method: "POST", body: JSON.stringify(body) });
+function post<T>(path: string, body?: unknown): Promise<T> {
+  return request<T>(path, {
+    method: "POST",
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+function patch<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 }
 
 // --- Types (mirrors app/schemas.py) -----------------------------------------
+
+export type TriageStatus = "WAITING" | "IN_PROGRESS" | "DONE";
+export type TriageSource = "app" | "voice_call";
+export type ReferralStatus = "PENDING" | "CONFIRMED" | "COMPLETED" | "NO_SHOW";
+export type StockItemType = "medicine" | "diagnostic";
 
 export type Patient = {
   id: number;
@@ -84,7 +96,28 @@ export type TriageEntry = {
   id: number;
   summary: string;
   answers: TriageAnswer[];
+  status: TriageStatus;
+  source: TriageSource;
   created_at: string;
+};
+
+export type FacilitySummary = {
+  id: number;
+  name: string;
+  type: string;
+  area_label: string;
+};
+
+export type StockItem = {
+  id: number;
+  item_name: string;
+  item_type: StockItemType;
+  available: boolean;
+  updated_at: string;
+};
+
+export type Facility = FacilitySummary & {
+  stock: StockItem[];
 };
 
 export type Doctor = {
@@ -92,13 +125,7 @@ export type Doctor = {
   name: string;
   specialization: string;
   created_at: string;
-};
-
-export type Facility = {
-  id: number;
-  name: string;
-  type: string;
-  area_label: string;
+  facility: FacilitySummary | null;
 };
 
 export type ConsultationNote = {
@@ -108,12 +135,24 @@ export type ConsultationNote = {
   high_risk_reason: string | null;
   created_at: string;
   doctor: Doctor;
-  referred_to_facility: Facility | null;
+  referred_to_facility: FacilitySummary | null;
+};
+
+export type Referral = {
+  id: number;
+  status: ReferralStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  to_facility: FacilitySummary;
+  doctor: Doctor;
 };
 
 export type PatientRecord = Patient & {
   triage_entries: TriageEntry[];
   notes: ConsultationNote[];
+  referrals: Referral[];
+  queue_position: number | null;
 };
 
 export type QueueItem = {
@@ -124,30 +163,50 @@ export type QueueItem = {
   village: string;
   is_high_risk: boolean;
   high_risk_reason: string | null;
+  latest_triage_id: number | null;
   latest_triage_summary: string | null;
   latest_triage_at: string | null;
+  latest_triage_status: TriageStatus | null;
+  latest_triage_source: TriageSource | null;
   triage_count: number;
   note_count: number;
+};
+
+export type Consultation = {
+  id: number;
+  room_name: string;
+  token: string;
+  livekit_url: string;
+  status: string;
+  created_at: string;
+  patient_name: string;
+  patient_unique_code: string;
+  doctor_name: string;
 };
 
 // --- Endpoints ---------------------------------------------------------------
 
 export type PatientDraft = Omit<Patient, "id" | "unique_code" | "created_at">;
 
+const code = (value: string) => encodeURIComponent(value);
+
 export const api = {
+  // Patients
   createPatient: (draft: PatientDraft) => post<Patient>("/patients", draft),
 
-  getPatientRecord: (code: string) =>
-    request<PatientRecord>(`/patients/${encodeURIComponent(code)}`),
+  getPatientRecord: (unique: string) =>
+    request<PatientRecord>(`/patients/${code(unique)}`),
+
+  getPatientReferrals: (unique: string) =>
+    request<Referral[]>(`/patients/${code(unique)}/referrals`),
 
   addTriageEntry: (
-    code: string,
+    unique: string,
     entry: { answers: TriageAnswer[]; summary?: string },
-  ) =>
-    post<TriageEntry>(`/patients/${encodeURIComponent(code)}/triage`, entry),
+  ) => post<TriageEntry>(`/patients/${code(unique)}/triage`, entry),
 
   addConsultationNote: (
-    code: string,
+    unique: string,
     note: {
       doctor_id: number;
       note_text: string;
@@ -155,15 +214,53 @@ export const api = {
       high_risk_reason?: string | null;
       referred_to_facility_id?: number | null;
     },
-  ) =>
-    post<ConsultationNote>(`/patients/${encodeURIComponent(code)}/notes`, note),
+  ) => post<ConsultationNote>(`/patients/${code(unique)}/notes`, note),
 
-  createDoctor: (draft: { name: string; specialization: string }) =>
-    post<Doctor>("/doctors", draft),
+  // Doctors
+  createDoctor: (draft: {
+    name: string;
+    specialization: string;
+    facility_id?: number | null;
+  }) => post<Doctor>("/doctors", draft),
 
+  // Queues
   getRecentQueue: () => request<QueueItem[]>("/triage/recent"),
 
   getHighRiskQueue: () => request<QueueItem[]>("/triage/high-risk"),
 
+  updateTriageStatus: (entryId: number, status: TriageStatus) =>
+    patch<TriageEntry>(`/triage/${entryId}/status`, { status }),
+
+  // Facilities and stock
   getFacilities: () => request<Facility[]>("/facilities"),
+
+  getFacilityStock: (facilityId: number) =>
+    request<StockItem[]>(`/facilities/${facilityId}/stock`),
+
+  updateStockItem: (facilityId: number, itemId: number, available: boolean) =>
+    patch<StockItem>(`/facilities/${facilityId}/stock/${itemId}`, { available }),
+
+  // Referrals
+  createReferral: (draft: {
+    patient_unique_code: string;
+    doctor_id: number;
+    to_facility_id: number;
+    notes?: string | null;
+  }) => post<Referral>("/referrals", draft),
+
+  updateReferralStatus: (referralId: number, status: ReferralStatus) =>
+    patch<Referral>(`/referrals/${referralId}/status`, { status }),
+
+  // Teleconsultation
+  startConsultation: (unique: string, doctorId: number) =>
+    post<Consultation>(`/consultations/${code(unique)}/start`, {
+      doctor_id: doctorId,
+    }),
+
+  // Resolves to null when no call is waiting, so it is cheap to poll.
+  getPendingConsultation: (unique: string) =>
+    request<Consultation | null>(`/consultations/pending/${code(unique)}`),
+
+  endConsultation: (consultationId: number) =>
+    post<Consultation>(`/consultations/${consultationId}/end`),
 };

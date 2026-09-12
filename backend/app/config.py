@@ -17,9 +17,18 @@ class Settings(BaseSettings):
         "postgresql+psycopg://postgres:postgres@localhost:5432/medlink_app"
     )
 
+    # The same LiveKit project the voice agent uses - one real-time stack.
+    livekit_url: str = ""
+    livekit_api_key: str = ""
+    livekit_api_secret: str = ""
+
     # The mobile app is served from a different origin (Metro / device), so the
     # API stays open during development. Lock this down before any real deployment.
     cors_origins: list[str] = ["*"]
+
+    @property
+    def livekit_configured(self) -> bool:
+        return bool(self.livekit_url and self.livekit_api_key and self.livekit_api_secret)
 
 
 settings = Settings()

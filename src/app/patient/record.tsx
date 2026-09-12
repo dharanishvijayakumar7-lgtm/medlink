@@ -2,6 +2,7 @@ import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { ReferralCard } from "@/components/referral-card";
 import {
   Badge,
   Card,
@@ -10,17 +11,37 @@ import {
   Loading,
   Screen,
   SectionTitle,
+  Tone,
 } from "@/components/ui";
-import { api, ConsultationNote, PatientRecord, TriageEntry } from "@/lib/api";
+import {
+  api,
+  ConsultationNote,
+  PatientRecord,
+  TriageEntry,
+  TriageStatus,
+} from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { usePatientSession } from "@/lib/patient-session";
 import { colors, radius, spacing } from "@/lib/theme";
 
+const TRIAGE_STATUS_META: Record<TriageStatus, { label: string; tone: Tone }> = {
+  WAITING: { label: "WAITING", tone: "warning" },
+  IN_PROGRESS: { label: "WITH A DOCTOR", tone: "doctor" },
+  DONE: { label: "REVIEWED", tone: "success" },
+};
+
 function TriageCard({ entry }: { entry: TriageEntry }) {
   const [expanded, setExpanded] = useState(false);
+  const statusMeta = TRIAGE_STATUS_META[entry.status];
 
   return (
     <Card>
+      <View style={styles.badgeRow}>
+        <Badge label={statusMeta.label} tone={statusMeta.tone} />
+        {entry.source === "voice_call" ? (
+          <Badge label="📞 PHONE CALL" tone="neutral" />
+        ) : null}
+      </View>
       <Text style={styles.timestamp}>{formatDateTime(entry.created_at)}</Text>
       <Text style={styles.summary}>{entry.summary}</Text>
 
@@ -134,6 +155,18 @@ export default function MyRecord() {
         <EmptyState
           title="No symptom checks yet"
           body="Run a symptom check from your home screen."
+        />
+      )}
+
+      <SectionTitle>Referrals</SectionTitle>
+      {record && record.referrals.length > 0 ? (
+        record.referrals.map((referral) => (
+          <ReferralCard key={referral.id} referral={referral} audience="patient" />
+        ))
+      ) : (
+        <EmptyState
+          title="No referrals yet"
+          body="If a doctor sends you to another facility, you can follow it here."
         />
       )}
 
