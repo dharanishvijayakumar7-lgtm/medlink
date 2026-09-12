@@ -3,41 +3,49 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { Badge, Card, ErrorBanner, Loading, Screen } from "@/components/ui";
+import { Icon } from "@/components/icon";
+import { Badge, ErrorBanner, Loading, Screen } from "@/components/ui";
 import { api, Consultation, PatientRecord } from "@/lib/api";
 import { usePatientSession } from "@/lib/patient-session";
-import { colors, radius, shadow, spacing } from "@/lib/theme";
+import { colors, elevation, radius, spacing, touch, type } from "@/lib/theme";
 
 /** How often to check for a doctor starting a call. Push comes in a later part. */
 const POLL_MS = 10_000;
 
-type ActionProps = {
+/** India's unified emergency number, as wired in Part 1. */
+const EMERGENCY_NUMBER = "112";
+
+function ActionTile({
+  icon,
+  title,
+  subtitle,
+  tint,
+  iconColor,
+  onPress,
+}: {
   icon: string;
   title: string;
   subtitle: string;
+  tint: string;
+  iconColor: string;
   onPress: () => void;
-  danger?: boolean;
-};
-
-function Action({ icon, title, subtitle, onPress, danger }: ActionProps) {
+}) {
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.action,
-        danger && styles.actionDanger,
-        pressed && styles.actionPressed,
-      ]}
+      style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
     >
-      <Text style={styles.actionIcon}>{icon}</Text>
-      <View style={styles.actionText}>
-        <Text style={[styles.actionTitle, danger && { color: colors.danger }]}>
-          {title}
-        </Text>
-        <Text style={styles.actionSubtitle}>{subtitle}</Text>
+      <View style={styles.tileTop}>
+        <View style={[styles.tileIcon, { backgroundColor: tint }]}>
+          <Icon name={icon} size={28} color={iconColor} />
+        </View>
+        <Icon name="chevron_right" size={20} color={colors.faint} />
       </View>
-      <Text style={styles.chevron}>{"›"}</Text>
+      <View>
+        <Text style={styles.tileTitle}>{title}</Text>
+        <Text style={styles.tileSubtitle}>{subtitle}</Text>
+      </View>
     </Pressable>
   );
 }
@@ -121,7 +129,14 @@ export default function PatientHome() {
 
   return (
     <Screen refreshing={loading} onRefresh={load}>
-      {record ? <Text style={styles.greeting}>Namaste, {record.name}</Text> : null}
+      <View style={styles.greeting}>
+        {record ? (
+          <Text style={styles.unit}>{record.village.toUpperCase()}</Text>
+        ) : null}
+        <Text style={styles.name} numberOfLines={1}>
+          Namaste, {record?.name ?? "there"}
+        </Text>
+      </View>
 
       {error ? <ErrorBanner message={error} onRetry={load} /> : null}
 
@@ -129,14 +144,14 @@ export default function PatientHome() {
         <Pressable
           accessibilityRole="button"
           onPress={joinCall}
-          style={({ pressed }) => [styles.callBanner, pressed && { opacity: 0.9 }]}
+          style={({ pressed }) => [styles.callBanner, pressed && styles.pressed]}
         >
-          <Text style={styles.callIcon}>📹</Text>
-          <View style={styles.callText}>
+          <View style={styles.callIcon}>
+            <Icon name="videocam" size={28} color={colors.onSuccess} />
+          </View>
+          <View style={styles.callBody}>
             <Text style={styles.callTitle}>Dr. {pending.doctor_name} is ready</Text>
-            <Text style={styles.callSubtitle}>
-              Tap to join your consultation now
-            </Text>
+            <Text style={styles.callSubtitle}>Tap to join your consultation now</Text>
           </View>
           <View style={styles.callAction}>
             <Text style={styles.callActionText}>Join</Text>
@@ -144,86 +159,148 @@ export default function PatientHome() {
         </Pressable>
       ) : null}
 
-      <Card style={styles.idCard}>
-        <Text style={styles.idLabel}>Your MedLink ID</Text>
-        <Text style={styles.idValue} selectable>
-          {code}
-        </Text>
-        <Text style={styles.idHelp}>
-          Share this ID with any doctor or health worker to let them open your record.
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={copyCode}
-          style={({ pressed }) => [styles.copyButton, pressed && { opacity: 0.8 }]}
-        >
-          <Text style={styles.copyText}>
-            {copied ? "✓  Copied" : "Copy ID"}
-          </Text>
-        </Pressable>
-      </Card>
+      {/* Digital Health Identity */}
+      <View style={styles.idCard}>
+        <View style={styles.idHeader}>
+          <View style={styles.idHeaderLeft}>
+            <Icon name="badge" size={20} color={colors.patient} />
+            <Text style={styles.idLabel}>Digital Health Identity</Text>
+          </View>
+          <Badge label="VERIFIED" tone="patient" />
+        </View>
+        <View style={styles.idRow}>
+          <View style={styles.idBody}>
+            <Text style={styles.idValue} selectable>
+              {code}
+            </Text>
+            {record ? (
+              <Text style={styles.idMeta} numberOfLines={1}>
+                {record.name} · {record.age} Yrs · {record.gender}
+              </Text>
+            ) : null}
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Copy Health ID"
+            onPress={copyCode}
+            style={({ pressed }) => [styles.copyButton, pressed && styles.pressed]}
+          >
+            <Icon
+              name={copied ? "check" : "content_copy"}
+              size={20}
+              color={colors.patient}
+            />
+            <Text style={styles.copyText}>{copied ? "Copied" : "Copy"}</Text>
+          </Pressable>
+        </View>
+      </View>
 
+      {/* Primary action */}
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push("/patient/symptom-check")}
+        style={({ pressed }) => [styles.primaryCard, pressed && styles.pressed]}
+      >
+        <View style={styles.primaryTop}>
+          <View style={styles.primaryTile}>
+            <Icon name="stethoscope" size={36} color={colors.onPrimary} />
+          </View>
+          <View style={styles.primaryArrow}>
+            <Icon name="arrow_forward" size={24} color={colors.onPrimary} />
+          </View>
+        </View>
+        <View style={styles.primaryFlag}>
+          <Text style={styles.primaryFlagText}>GUIDED SYMPTOM ASSESSMENT</Text>
+        </View>
+        <Text style={styles.primaryTitle}>Start Symptom Check</Text>
+        <Text style={styles.primaryBody}>
+          Answer a few questions about how you feel. A doctor reviews every answer.
+        </Text>
+      </Pressable>
+
+      {/* Live queue position */}
       {position !== null ? (
-        <Card style={styles.queueCard}>
-          <Text style={styles.queueLabel}>Your place in the queue</Text>
-          <View style={styles.queueRow}>
-            <Text style={styles.queueNumber}>#{position}</Text>
-            <Text style={styles.queueHint}>
+        <View style={styles.snapshot}>
+          <View style={styles.snapshotIcon}>
+            <Icon name="schedule" size={28} color={colors.patient} />
+          </View>
+          <View style={styles.snapshotBody}>
+            <Text style={styles.snapshotLabel}>Your place in the queue</Text>
+            <Text style={styles.snapshotValue}>Number {position}</Text>
+            <Text style={styles.snapshotMeta}>
               {position === 1
                 ? "You are next. Keep your phone nearby."
                 : `${position - 1} ${position === 2 ? "person is" : "people are"} ahead of you.`}
             </Text>
           </View>
-        </Card>
+        </View>
       ) : null}
 
       {flagged ? (
-        <Card style={styles.flagCard}>
-          <Badge label="FLAGGED BY A DOCTOR" tone="danger" />
-          <Text style={styles.flagText}>
-            {flagged.high_risk_reason?.trim()
-              ? flagged.high_risk_reason
-              : "A doctor marked you as needing follow-up."}
-          </Text>
-          <Text style={styles.flagMeta}>
-            Dr. {flagged.doctor.name} - open My record for the full note.
-          </Text>
-        </Card>
+        <View style={styles.flagCard}>
+          <Icon name="warning" size={28} color={colors.warning} />
+          <View style={styles.flagBody}>
+            <Text style={styles.flagTitle}>A doctor flagged you for follow-up</Text>
+            <Text style={styles.flagText}>
+              {flagged.high_risk_reason?.trim()
+                ? flagged.high_risk_reason
+                : "Open My record for the full note."}
+            </Text>
+            <Text style={styles.flagMeta}>Dr. {flagged.doctor.name}</Text>
+          </View>
+        </View>
       ) : null}
 
-      <View style={styles.actions}>
-        <Action
-          icon="🩺"
-          title="Start symptom check"
-          subtitle="Answer a few questions about how you feel"
-          onPress={() => router.push("/patient/symptom-check")}
-        />
-        <Action
-          icon="📋"
-          title="My record"
-          subtitle={
-            record
-              ? `${record.triage_entries.length} symptom check${record.triage_entries.length === 1 ? "" : "s"} - ${record.referrals.length} referral${record.referrals.length === 1 ? "" : "s"}`
-              : "Your triage history, referrals and doctor notes"
-          }
+      {/* Two-column action tiles */}
+      <View style={styles.tileRow}>
+        <ActionTile
+          icon="folder_shared"
+          title="My Record"
+          subtitle="Past visits & notes"
+          tint={colors.patientTint}
+          iconColor={colors.patient}
           onPress={() => router.push("/patient/record")}
         />
-        <Action
-          icon="🏥"
-          title="Nearby facilities"
-          subtitle="See what medicines and tests are in stock"
+        <ActionTile
+          icon="local_hospital"
+          title="Facilities"
+          subtitle="Clinics & hospitals"
+          tint={colors.secondaryContainer}
+          iconColor={colors.doctor}
           onPress={() => router.push("/patient/facilities")}
-        />
-        <Action
-          icon="🚨"
-          title="Emergency SOS"
-          subtitle="Call 112 and read out your location"
-          onPress={() => router.push("/patient/sos")}
-          danger
         />
       </View>
 
-      <Pressable onPress={startOver} style={styles.startOver} hitSlop={8}>
+      {/* Emergency SOS - the only red in the app */}
+      <View style={styles.sosCard}>
+        <View style={styles.sosTop}>
+          <View style={styles.sosIcon}>
+            <Icon name="emergency" size={32} color={colors.onEmergency} />
+          </View>
+          <View style={styles.sosBody}>
+            <Text style={styles.sosTitle}>EMERGENCY SOS</Text>
+            <Text style={styles.sosText}>
+              Open for the emergency number and your exact location
+            </Text>
+          </View>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push("/patient/sos")}
+          style={({ pressed }) => [styles.sosButton, pressed && styles.pressed]}
+        >
+          <Icon name="call" size={28} color={colors.emergency} />
+          <Text style={styles.sosButtonText}>
+            Emergency help ({EMERGENCY_NUMBER})
+          </Text>
+        </Pressable>
+        <View style={styles.sosFooter}>
+          <Text style={styles.sosFooterText}>Toll-free government hotline</Text>
+          <Text style={styles.sosFooterText}>GPS location shown</Text>
+        </View>
+      </View>
+
+      <Pressable onPress={startOver} style={styles.startOver} hitSlop={12}>
         <Text style={styles.startOverText}>Not you? Register a different patient</Text>
       </Pressable>
     </Screen>
@@ -231,7 +308,11 @@ export default function PatientHome() {
 }
 
 const styles = StyleSheet.create({
-  greeting: { fontSize: 22, fontWeight: "700", color: colors.text },
+  pressed: { opacity: 0.9 },
+
+  greeting: { gap: spacing.xs },
+  unit: { ...type.labelMd, color: colors.patient, letterSpacing: 0.8 },
+  name: { ...type.headlineXlMobile, color: colors.text },
 
   callBanner: {
     flexDirection: "row",
@@ -239,88 +320,185 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     backgroundColor: colors.success,
     borderRadius: radius.lg,
-    padding: spacing.lg,
-    ...shadow,
+    padding: spacing.md,
   },
-  callIcon: { fontSize: 26 },
-  callText: { flex: 1, gap: 2 },
-  callTitle: { fontSize: 17, fontWeight: "800", color: "#FFFFFF" },
-  callSubtitle: { fontSize: 13, color: "rgba(255,255,255,0.9)" },
-  callAction: {
-    backgroundColor: "#FFFFFF",
+  callIcon: {
+    width: 48,
+    height: 48,
     borderRadius: radius.pill,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  callActionText: { color: colors.success, fontWeight: "800", fontSize: 15 },
+  callBody: { flex: 1, gap: 2 },
+  callTitle: { ...type.labelLg, color: colors.onSuccess },
+  callSubtitle: { ...type.labelMd, color: "rgba(255,255,255,0.92)" },
+  callAction: {
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  callActionText: { ...type.labelLg, color: colors.success },
 
   idCard: {
-    backgroundColor: colors.patient,
-    borderColor: colors.patientDark,
-    gap: spacing.xs,
+    backgroundColor: colors.surfaceContainer,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
   },
-  idLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 1,
-    color: "rgba(255,255,255,0.75)",
+  idHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
   },
-  idValue: {
-    fontSize: 38,
-    fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: 1.5,
-  },
-  idHelp: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.85)",
-    lineHeight: 19,
-    marginBottom: spacing.sm,
-  },
+  idHeaderLeft: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  idLabel: { ...type.labelMd, color: colors.muted },
+  idRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  idBody: { flex: 1, minWidth: 0 },
+  idValue: { ...type.headlineLg, color: colors.text, letterSpacing: 1.5 },
+  idMeta: { ...type.bodyMd, color: colors.muted },
   copyButton: {
-    alignSelf: "flex-start",
-    backgroundColor: "rgba(255,255,255,0.18)",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    height: touch.min,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+  },
+  copyText: { ...type.labelMd, color: colors.patient },
+
+  primaryCard: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  primaryTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  primaryTile: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.tile,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryArrow: {
+    width: 40,
+    height: 40,
     borderRadius: radius.pill,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  copyText: { color: "#FFFFFF", fontWeight: "700", fontSize: 14 },
-
-  queueCard: { gap: spacing.sm },
-  queueLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1,
-    color: colors.faint,
+  primaryFlag: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: radius.sm,
+    paddingVertical: 2,
+    paddingHorizontal: spacing.sm,
+    marginTop: spacing.sm,
   },
-  queueRow: { flexDirection: "row", alignItems: "center", gap: spacing.lg },
-  queueNumber: { fontSize: 40, fontWeight: "800", color: colors.patient },
-  queueHint: { flex: 1, fontSize: 15, color: colors.muted, lineHeight: 21 },
+  primaryFlagText: { ...type.labelMd, color: colors.onPrimary, letterSpacing: 0.8 },
+  primaryTitle: { ...type.headlineLg, color: colors.onPrimary },
+  primaryBody: { ...type.bodyMd, color: colors.onPrimaryContainer },
 
-  flagCard: { backgroundColor: colors.dangerTint, borderColor: "#F3C9C9" },
-  flagText: { fontSize: 15, color: colors.text, lineHeight: 21 },
-  flagMeta: { fontSize: 13, color: colors.muted },
-
-  actions: { gap: spacing.md, marginTop: spacing.sm },
-  action: {
+  snapshot: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.surfaceContainerLow,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    ...shadow,
+    padding: spacing.md,
   },
-  actionDanger: { borderColor: "#F3C9C9", backgroundColor: colors.dangerTint },
-  actionPressed: { opacity: 0.85 },
-  actionIcon: { fontSize: 26 },
-  actionText: { flex: 1, gap: 2 },
-  actionTitle: { fontSize: 17, fontWeight: "700", color: colors.text },
-  actionSubtitle: { fontSize: 13, color: colors.muted, lineHeight: 18 },
-  chevron: { fontSize: 26, color: colors.faint },
+  snapshotIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceContainerHigh,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  snapshotBody: { flex: 1, minWidth: 0 },
+  snapshotLabel: { ...type.labelMd, color: colors.muted },
+  snapshotValue: { ...type.headlineMd, color: colors.text },
+  snapshotMeta: { ...type.bodyMd, color: colors.muted },
 
-  startOver: { alignItems: "center", paddingVertical: spacing.lg },
-  startOverText: { fontSize: 14, color: colors.faint, fontWeight: "600" },
+  flagCard: {
+    flexDirection: "row",
+    gap: spacing.md,
+    backgroundColor: colors.warningTint,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.warning,
+    padding: spacing.md,
+  },
+  flagBody: { flex: 1, gap: 2 },
+  flagTitle: { ...type.labelLg, color: colors.text },
+  flagText: { ...type.bodyMd, color: colors.text },
+  flagMeta: { ...type.labelMd, color: colors.muted },
+
+  tileRow: { flexDirection: "row", gap: spacing.md },
+  tile: {
+    ...elevation.level1,
+    flex: 1,
+    minHeight: 176,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    justifyContent: "space-between",
+  },
+  tileTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  tileIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.tile,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tileTitle: { ...type.headlineMd, color: colors.text },
+  tileSubtitle: { ...type.bodyMd, color: colors.muted, marginTop: 2 },
+
+  sosCard: {
+    backgroundColor: colors.emergency,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  sosTop: { flexDirection: "row", gap: spacing.md },
+  sosIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sosBody: { flex: 1, minWidth: 0, gap: spacing.xs },
+  sosTitle: { ...type.headlineLg, color: colors.onEmergency, letterSpacing: 0.5 },
+  sosText: { ...type.bodyMd, color: "rgba(255,255,255,0.95)" },
+  sosButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    minHeight: touch.sos,
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
+  },
+  sosButtonText: { ...type.headlineMd, color: colors.emergency },
+  sosFooter: { flexDirection: "row", justifyContent: "space-between" },
+  sosFooterText: { ...type.labelMd, color: "rgba(255,255,255,0.85)" },
+
+  startOver: { alignItems: "center", paddingVertical: spacing.md },
+  startOverText: { ...type.labelMd, color: colors.faint },
 });

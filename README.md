@@ -1,4 +1,4 @@
-# MedLink — Mobile App (Parts 1 & 2)
+# MedLink — Mobile App (Part 1 & Part 2, complete)
 
 Smartphone companion to the MedLink LiveKit voice agent. Voice-based AI healthcare
 triage for rural India (SIH 2026).
@@ -64,7 +64,8 @@ src/app/
     high-risk.tsx          flagged worklist
     search.tsx             open any record by MED-ID
     stock.tsx              toggle medicine / diagnostic availability
-    patient/[code].tsx     record, start call, notes, tracked referrals
+    dashboard.tsx          patient load, referral + follow-up completion
+    patient/[code].tsx     record, call, notes, referrals, follow-ups
 ```
 
 Session handling differs by role, on purpose:
@@ -94,7 +95,8 @@ triage_entries       id, patient_id, summary, answers JSONB,
                      status (WAITING|IN_PROGRESS|DONE),
                      source (app|voice_call), created_at
 consultation_notes   id, patient_id, doctor_id, note_text, is_high_risk,
-                     high_risk_reason, referred_to_facility_id, created_at
+                     high_risk_reason, referred_to_facility_id,
+                     follow_up_due_date, follow_up_resolved, created_at
 referrals            id, patient_id, doctor_id, to_facility_id,
                      status (PENDING|CONFIRMED|COMPLETED|NO_SHOW),
                      notes, created_at, updated_at
@@ -153,14 +155,17 @@ adb reverse tcp:8000 tcp:8000
 | `GET` | `/patients/{code}` | full record + referrals + queue position |
 | `GET` | `/patients/{code}/referrals` | patient-facing referral tracker |
 | `POST` | `/patients/{code}/triage` | add a symptom check |
-| `POST` | `/patients/{code}/notes` | doctor note (+ high-risk flag) |
+| `POST` | `/patients/{code}/notes` | doctor note (+ high-risk flag, + follow-up date) |
+| `PATCH` | `/notes/{id}/follow-up` | reschedule or close a follow-up |
 | `GET` | `/triage/recent` | doctor queue, newest first |
 | `GET` | `/triage/high-risk` | flagged worklist |
 | `PATCH` | `/triage/{id}/status` | WAITING → IN_PROGRESS → DONE |
+| `GET` | `/triage/follow-ups-due` | patients needing a check-in now |
 | `POST` | `/triage/by-phone` | **called by the voice agent**, not the app |
 | `POST` | `/referrals` | create a tracked referral |
 | `PATCH` | `/referrals/{id}/status` | advance a referral |
 | `GET` | `/facilities` | facilities with their stock |
+| `GET` | `/facilities/{id}/dashboard?days=30` | load + completion rates |
 | `GET` | `/facilities/{id}/stock` | stock for one facility |
 | `PATCH` | `/facilities/{id}/stock/{item}` | mark in / out of stock |
 | `POST` | `/consultations/{code}/start` | doctor opens a room, gets a token |
@@ -206,6 +211,46 @@ Details that matter:
   caller during the call is what will disambiguate this properly.
 
 ---
+
+## The facility dashboard
+
+`GET /facilities/{id}/dashboard?days=30` is pure aggregation over what Parts 1
+and 2 already record — no new tables. Three figures:
+
+- **`patient_load`** — `is_proxy: true`, and it says so in the response. A
+  `TriageEntry` records the *patient*, not where they were seen, so there is no
+  honest way to count real footfall yet. This counts distinct patients
+  **referred to** the facility plus those **seen by a doctor attached to it**,
+  which understates the truth. `basis` carries that caveat to whoever reads the
+  number, and the dashboard prints it under the figure rather than hiding it.
+  Adding `facility_id` to `TriageEntry` is what would make this exact.
+- **`referral_completion_rate`** — a direct link, no proxy: COMPLETED referrals
+  over all referrals to this facility created in the window.
+- **`follow_up_completion_rate`** — follow-ups whose **due date** falls in the
+  window, on notes written by doctors attached to this facility. Counting by due
+  date rather than note date means a follow-up set months ago still lands in the
+  window it actually came due.
+
+Every rate is `null`, never `0.0`, when nothing was due — the UI shows "--" and
+an explanation instead of a 0% that reads as failure.
+
+## Follow-up tracking
+
+Part 1's high-risk flag said *this patient matters*. A follow-up says **when** to
+come back to them and whether that has happened.
+
+- A due date is optional and only kept alongside a high-risk flag — same rule as
+  the high-risk reason, so a date can never outlive its flag.
+- `GET /triage/follow-ups-due` returns anyone whose date has arrived and is not
+  resolved, longest overdue first. Pulled in-app; push is a later part.
+- `PATCH /notes/{id}/follow-up` reschedules, resolves, or clears. An explicit
+  `null` due date clears it; omitting the key leaves it alone. Clearing a date
+  also clears `resolved` — there is nothing left to have resolved. Resolving a
+  note with no due date is a 409 rather than a silent no-op.
+- The due-date picker is **preset chips plus typed `YYYY-MM-DD`**, not a native
+  date picker. Presets cover the real cases ("check again in a week"), and it
+  keeps another native module out of the build. Dates are handled as plain ISO
+  strings end to end so no timezone shifts them by a day.
 
 ## Design decisions worth knowing
 

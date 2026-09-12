@@ -1,6 +1,15 @@
-/** Small shared UI kit: plain React Native, no component library. */
+/**
+ * Shared UI kit, built on the Rural Clinical Core tokens in @/lib/theme.
+ *
+ * Every value here comes from a token. Three system rules are enforced by the
+ * components rather than left to call sites:
+ *  - Red is emergency-only. `warning` (amber) carries every clinical alert,
+ *    error state and destructive action.
+ *  - Elevation is borders, never a soft drop shadow.
+ *  - Pills are for status chips and filter toggles only, never content cards.
+ */
 
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -17,18 +26,33 @@ import {
   ViewStyle,
 } from "react-native";
 
-import { colors, radius, shadow, spacing } from "@/lib/theme";
+import { Icon } from "@/components/icon";
+import { colors, elevation, radius, spacing, touch, type } from "@/lib/theme";
 
-export type Tone = "patient" | "doctor" | "danger" | "success" | "warning" | "neutral";
+export type Tone =
+  | "patient"
+  | "doctor"
+  | "warning"
+  | "emergency"
+  | "success"
+  | "neutral";
 
-const TONES: Record<Tone, { base: string; tint: string }> = {
-  patient: { base: colors.patient, tint: colors.patientTint },
-  doctor: { base: colors.doctor, tint: colors.doctorTint },
-  danger: { base: colors.danger, tint: colors.dangerTint },
-  success: { base: colors.success, tint: colors.successTint },
-  warning: { base: colors.warning, tint: colors.warningTint },
-  neutral: { base: colors.muted, tint: colors.bg },
+const TONES: Record<Tone, { base: string; tint: string; on: string }> = {
+  patient: { base: colors.patient, tint: colors.patientTint, on: colors.onPatient },
+  doctor: { base: colors.doctor, tint: colors.doctorTint, on: colors.onDoctor },
+  warning: { base: colors.warning, tint: colors.warningTint, on: colors.onWarning },
+  emergency: {
+    base: colors.emergency,
+    tint: colors.emergencyTint,
+    on: colors.onEmergency,
+  },
+  success: { base: colors.success, tint: colors.successTint, on: colors.onSuccess },
+  neutral: { base: colors.muted, tint: colors.surfaceContainerHigh, on: "#ffffff" },
 };
+
+export function toneColor(tone: Tone): string {
+  return TONES[tone].base;
+}
 
 // --- Layout ------------------------------------------------------------------
 
@@ -79,15 +103,51 @@ export function Screen({
 export function Card({
   children,
   style,
+  clinical = false,
 }: {
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
+  /** 2px navy border marking an active clinician card. */
+  clinical?: boolean;
 }) {
-  return <View style={[styles.card, style]}>{children}</View>;
+  return (
+    <View
+      style={[
+        styles.card,
+        clinical ? elevation.level1Clinical : elevation.level1,
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
 }
 
 export function SectionTitle({ children }: { children: ReactNode }) {
   return <Text style={styles.sectionTitle}>{children}</Text>;
+}
+
+/** Screen header: icon beside a headline, as every mockup opens. */
+export function ScreenHeader({
+  icon,
+  title,
+  subtitle,
+  tone = "patient",
+}: {
+  icon?: string;
+  title: string;
+  subtitle?: string;
+  tone?: Tone;
+}) {
+  return (
+    <View style={styles.header}>
+      <View style={styles.headerRow}>
+        {icon ? <Icon name={icon} size={32} color={TONES[tone].base} /> : null}
+        <Text style={styles.headerTitle}>{title}</Text>
+      </View>
+      {subtitle ? <Text style={styles.headerSubtitle}>{subtitle}</Text> : null}
+    </View>
+  );
 }
 
 // --- Buttons -----------------------------------------------------------------
@@ -97,23 +157,33 @@ type ButtonProps = {
   onPress: () => void;
   tone?: Tone;
   variant?: "solid" | "outline";
+  icon?: string;
   loading?: boolean;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
 };
+
+/** Height follows the tone: patient 56, doctor 48, emergency 64. */
+function heightFor(tone: Tone): number {
+  if (tone === "emergency") return touch.sos;
+  if (tone === "doctor") return touch.doctorAction;
+  return touch.patientAction;
+}
 
 export function Button({
   title,
   onPress,
   tone = "patient",
   variant = "solid",
+  icon,
   loading = false,
   disabled = false,
   style,
 }: ButtonProps) {
-  const { base } = TONES[tone];
+  const { base, on } = TONES[tone];
   const inactive = disabled || loading;
   const solid = variant === "solid";
+  const label = solid ? on : base;
 
   return (
     <Pressable
@@ -122,21 +192,58 @@ export function Button({
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
+        { minHeight: heightFor(tone) },
         solid
           ? { backgroundColor: base }
-          : { backgroundColor: "transparent", borderWidth: 1.5, borderColor: base },
-        pressed && !inactive && styles.buttonPressed,
-        inactive && styles.buttonDisabled,
+          : { backgroundColor: "transparent", borderWidth: 2, borderColor: base },
+        pressed && !inactive && styles.pressed,
+        inactive && styles.disabled,
         style,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={solid ? "#FFFFFF" : base} />
+        <ActivityIndicator color={label} />
       ) : (
-        <Text style={[styles.buttonText, { color: solid ? "#FFFFFF" : base }]}>
-          {title}
-        </Text>
+        <>
+          {icon ? <Icon name={icon} size={22} color={label} /> : null}
+          <Text style={[styles.buttonText, { color: label }]}>{title}</Text>
+        </>
       )}
+    </Pressable>
+  );
+}
+
+/**
+ * Destructive action. Never red - DESIGN.md reserves red for emergencies, so
+ * this is a charcoal outline, or amber when data loss is at stake.
+ */
+export function DestructiveButton({
+  title,
+  onPress,
+  dataLoss = false,
+  icon,
+  style,
+}: {
+  title: string;
+  onPress: () => void;
+  dataLoss?: boolean;
+  icon?: string;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const line = dataLoss ? colors.warning : colors.ink;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.button,
+        { minHeight: touch.min, borderWidth: 2, borderColor: line },
+        pressed && styles.pressed,
+        style,
+      ]}
+    >
+      {icon ? <Icon name={icon} size={22} color={line} /> : null}
+      <Text style={[styles.buttonText, { color: line }]}>{title}</Text>
     </Pressable>
   );
 }
@@ -151,7 +258,7 @@ export function LinkButton({
   tone?: Tone;
 }) {
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} hitSlop={8}>
+    <Pressable accessibilityRole="button" onPress={onPress} hitSlop={12}>
       <Text style={[styles.linkButton, { color: TONES[tone].base }]}>{title}</Text>
     </Pressable>
   );
@@ -162,22 +269,68 @@ export function LinkButton({
 type TextFieldProps = TextInputProps & {
   label: string;
   hint?: string;
+  /** Switches the border to amber and shows the message below. Never red. */
+  error?: string | null;
+  /** Right-aligned marker on the label row, as the registration mockups show. */
+  requirement?: string;
+  /** Small glyph before the label, used on the doctor forms. */
+  labelIcon?: string;
 };
 
-export function TextField({ label, hint, style, ...props }: TextFieldProps) {
+export function TextField({
+  label,
+  hint,
+  error,
+  requirement,
+  labelIcon,
+  style,
+  ...props
+}: TextFieldProps) {
+  const [focused, setFocused] = useState(false);
+  const borderColor = error
+    ? colors.warning
+    : focused
+      ? colors.patient
+      : colors.inputBorder;
+
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
+      {/* Pinned above the input, never a placeholder that vanishes on typing. */}
+      <View style={styles.labelRow}>
+        {labelIcon ? <Icon name={labelIcon} size={20} color={colors.doctor} /> : null}
+        <Text style={styles.label}>{label}</Text>
+        {requirement ? (
+          <Text style={styles.requirement}>{requirement}</Text>
+        ) : null}
+      </View>
       <TextInput
         placeholderTextColor={colors.faint}
         {...props}
-        style={[styles.input, props.multiline && styles.inputMultiline, style]}
+        onFocus={(event) => {
+          setFocused(true);
+          props.onFocus?.(event);
+        }}
+        onBlur={(event) => {
+          setFocused(false);
+          props.onBlur?.(event);
+        }}
+        style={[
+          styles.input,
+          { borderColor },
+          props.multiline && styles.inputMultiline,
+          style,
+        ]}
       />
-      {hint ? <Text style={styles.hint}>{hint}</Text> : null}
+      {error ? (
+        <Text style={styles.errorHint}>{error}</Text>
+      ) : hint ? (
+        <Text style={styles.hint}>{hint}</Text>
+      ) : null}
     </View>
   );
 }
 
+/** Filter toggles and single-select options. Pills are allowed here. */
 export function ChoiceChips({
   label,
   options,
@@ -191,7 +344,7 @@ export function ChoiceChips({
   onChange: (next: string) => void;
   tone?: Tone;
 }) {
-  const { base, tint } = TONES[tone];
+  const { base } = TONES[tone];
   return (
     <View style={styles.field}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
@@ -206,11 +359,14 @@ export function ChoiceChips({
               onPress={() => onChange(option)}
               style={[
                 styles.chip,
-                selected && { backgroundColor: tint, borderColor: base },
+                selected && { backgroundColor: base, borderColor: base },
               ]}
             >
               <Text
-                style={[styles.chipText, selected && { color: base, fontWeight: "700" }]}
+                style={[
+                  styles.chipText,
+                  selected && { color: TONES[tone].on },
+                ]}
               >
                 {option}
               </Text>
@@ -235,7 +391,7 @@ export function MultiChoiceChips({
   onChange: (next: string[]) => void;
   tone?: Tone;
 }) {
-  const { base, tint } = TONES[tone];
+  const { base, on } = TONES[tone];
   const toggle = (option: string) =>
     onChange(
       values.includes(option)
@@ -257,13 +413,12 @@ export function MultiChoiceChips({
               onPress={() => toggle(option)}
               style={[
                 styles.chip,
-                selected && { backgroundColor: tint, borderColor: base },
+                selected && { backgroundColor: base, borderColor: base },
               ]}
             >
-              <Text
-                style={[styles.chipText, selected && { color: base, fontWeight: "700" }]}
-              >
-                {selected ? "✓ " + option : option}
+              {selected ? <Icon name="check" size={16} color={on} /> : null}
+              <Text style={[styles.chipText, selected && { color: on }]}>
+                {option}
               </Text>
             </Pressable>
           );
@@ -273,11 +428,12 @@ export function MultiChoiceChips({
   );
 }
 
+/** 24x24 ring inside a 48x48 touch target, per DESIGN.md. */
 export function Checkbox({
   label,
   value,
   onValueChange,
-  tone = "doctor",
+  tone = "patient",
 }: {
   label: string;
   value: boolean;
@@ -295,7 +451,7 @@ export function Checkbox({
       <View
         style={[styles.checkboxBox, value && { backgroundColor: base, borderColor: base }]}
       >
-        {value ? <Text style={styles.checkboxTick}>{"✓"}</Text> : null}
+        {value ? <Icon name="check" size={18} color="#ffffff" /> : null}
       </View>
       <Text style={styles.checkboxLabel}>{label}</Text>
     </Pressable>
@@ -304,7 +460,27 @@ export function Checkbox({
 
 // --- Status ------------------------------------------------------------------
 
-export function Badge({ label, tone = "neutral" }: { label: string; tone?: Tone }) {
+/** Triage/health status chip: 36px tall, solid fill, white text. */
+export function Badge({
+  label,
+  tone = "neutral",
+  icon,
+}: {
+  label: string;
+  tone?: Tone;
+  icon?: string;
+}) {
+  const { base, on } = TONES[tone];
+  return (
+    <View style={[styles.badge, { backgroundColor: base }]}>
+      {icon ? <Icon name={icon} size={14} color={on} /> : null}
+      <Text style={[styles.badgeText, { color: on }]}>{label}</Text>
+    </View>
+  );
+}
+
+/** Quieter variant for metadata that is not a clinical status. */
+export function SoftBadge({ label, tone = "neutral" }: { label: string; tone?: Tone }) {
   const { base, tint } = TONES[tone];
   return (
     <View style={[styles.badge, { backgroundColor: tint }]}>
@@ -322,6 +498,7 @@ export function Loading({ label }: { label?: string }) {
   );
 }
 
+/** Errors are amber, never red. */
 export function ErrorBanner({
   message,
   onRetry,
@@ -331,19 +508,29 @@ export function ErrorBanner({
 }) {
   return (
     <View style={styles.errorBanner}>
-      <Text style={styles.errorText}>{message}</Text>
-      {onRetry ? (
-        <View style={styles.errorAction}>
-          <LinkButton title="Try again" onPress={onRetry} tone="danger" />
-        </View>
-      ) : null}
+      <Icon name="warning" size={22} color={colors.warning} />
+      <View style={styles.errorBody}>
+        <Text style={styles.errorText}>{message}</Text>
+        {onRetry ? (
+          <LinkButton title="Try again" onPress={onRetry} tone="warning" />
+        ) : null}
+      </View>
     </View>
   );
 }
 
-export function EmptyState({ title, body }: { title: string; body?: string }) {
+export function EmptyState({
+  title,
+  body,
+  icon,
+}: {
+  title: string;
+  body?: string;
+  icon?: string;
+}) {
   return (
     <View style={styles.empty}>
+      {icon ? <Icon name={icon} size={40} color={colors.outlineVariant} /> : null}
       <Text style={styles.emptyTitle}>{title}</Text>
       {body ? <Text style={styles.emptyBody}>{body}</Text> : null}
     </View>
@@ -352,105 +539,128 @@ export function EmptyState({ title, body }: { title: string; body?: string }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  screenPadding: { padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
+  screenPadding: {
+    padding: spacing.margin,
+    paddingBottom: spacing.xl,
+    gap: spacing.md,
+  },
 
   card: {
-    backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
+    padding: spacing.md,
     gap: spacing.sm,
-    ...shadow,
   },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-    color: colors.faint,
+    ...type.labelLg,
+    color: colors.text,
     marginTop: spacing.sm,
   },
 
+  header: { gap: spacing.xs },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  headerTitle: { ...type.headlineXlMobile, color: colors.text, flex: 1 },
+  headerSubtitle: { ...type.bodyXl, color: colors.muted },
+
   button: {
-    minHeight: 52,
-    borderRadius: radius.md,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: spacing.lg,
-  },
-  buttonPressed: { opacity: 0.82 },
-  buttonDisabled: { opacity: 0.45 },
-  buttonText: { fontSize: 16, fontWeight: "700" },
-  linkButton: { fontSize: 15, fontWeight: "600", paddingVertical: spacing.xs },
-
-  field: { gap: spacing.xs },
-  label: { fontSize: 14, fontWeight: "600", color: colors.text },
-  hint: { fontSize: 12, color: colors.muted },
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    gap: spacing.sm,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    fontSize: 16,
-    color: colors.text,
-    minHeight: 48,
   },
-  inputMultiline: { minHeight: 110, textAlignVertical: "top" },
+  pressed: { opacity: 0.85 },
+  disabled: { opacity: 0.45 },
+  buttonText: { ...type.bodyXl, fontFamily: type.labelLg.fontFamily },
+  linkButton: { ...type.labelLg, paddingVertical: spacing.xs },
+
+  field: { gap: spacing.xs },
+  labelRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  label: { ...type.labelLg, color: colors.text, flex: 1 },
+  requirement: { ...type.labelMd, fontFamily: type.bodyLg.fontFamily, color: colors.muted },
+  hint: { ...type.labelMd, color: colors.muted },
+  errorHint: { ...type.labelMd, color: colors.warning },
+  input: {
+    backgroundColor: colors.card,
+    borderWidth: 2,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    minHeight: touch.patientAction,
+    ...type.bodyLg,
+    color: colors.text,
+  },
+  inputMultiline: { minHeight: 112, textAlignVertical: "top", paddingTop: spacing.md },
 
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   chip: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    minHeight: touch.chip,
+    borderWidth: 1.5,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.card,
     borderRadius: radius.pill,
-    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
+    justifyContent: "center",
   },
-  chipText: { fontSize: 14, color: colors.muted },
+  chipText: { ...type.labelMd, color: colors.muted },
 
   checkboxRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
-    paddingVertical: spacing.sm,
+    minHeight: touch.min,
   },
   checkboxBox: {
     width: 24,
     height: 24,
     borderRadius: radius.sm,
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    borderWidth: 2.5,
+    borderColor: colors.inputBorder,
     alignItems: "center",
     justifyContent: "center",
   },
-  checkboxTick: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },
-  checkboxLabel: { flex: 1, fontSize: 15, color: colors.text, fontWeight: "500" },
+  checkboxLabel: { flex: 1, ...type.bodyMd, color: colors.text },
 
   badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
     borderRadius: radius.pill,
-    paddingVertical: 3,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.md,
     alignSelf: "flex-start",
   },
-  badgeText: { fontSize: 11, fontWeight: "800", letterSpacing: 0.4 },
+  badgeText: { ...type.labelMd, fontSize: 13 },
 
-  centered: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.md },
-  centeredText: { color: colors.muted, fontSize: 14 },
+  centered: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.md,
+    backgroundColor: colors.bg,
+  },
+  centeredText: { ...type.bodyLg, color: colors.muted },
 
   errorBanner: {
-    backgroundColor: colors.dangerTint,
+    flexDirection: "row",
+    gap: spacing.sm,
+    backgroundColor: colors.warningTint,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: "#F3C9C9",
+    borderWidth: 1.5,
+    borderColor: colors.warning,
     padding: spacing.md,
   },
-  errorText: { color: colors.danger, fontSize: 14, fontWeight: "500" },
-  errorAction: { marginTop: spacing.xs },
+  errorBody: { flex: 1, gap: spacing.xs },
+  errorText: { ...type.bodyLg, color: colors.text },
 
-  empty: { alignItems: "center", gap: spacing.xs, paddingVertical: spacing.xl },
-  emptyTitle: { fontSize: 16, fontWeight: "700", color: colors.text },
-  emptyBody: { fontSize: 14, color: colors.muted, textAlign: "center" },
+  empty: {
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.xl,
+  },
+  emptyTitle: { ...type.headlineMd, color: colors.text, textAlign: "center" },
+  emptyBody: { ...type.bodyLg, color: colors.muted, textAlign: "center" },
 });

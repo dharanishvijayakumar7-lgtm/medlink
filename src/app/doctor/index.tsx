@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { FacilityPicker } from "@/components/facility-picker";
+import { Icon } from "@/components/icon";
 import {
   Button,
   Card,
@@ -13,7 +14,7 @@ import {
 } from "@/components/ui";
 import { api, Facility } from "@/lib/api";
 import { useDoctorSession } from "@/lib/doctor-session";
-import { colors, spacing } from "@/lib/theme";
+import { colors, radius, spacing, type } from "@/lib/theme";
 
 const SPECIALIZATIONS = [
   "General Medicine",
@@ -24,9 +25,15 @@ const SPECIALIZATIONS = [
   "Other",
 ] as const;
 
+const ASSURANCES: { icon: string; title: string; caption: string }[] = [
+  { icon: "lock", title: "EHR Encrypted", caption: "Records stay on your server" },
+  { icon: "sync_alt", title: "Rural Tele-Sync", caption: "Works on weak links" },
+];
+
 /**
  * Doctor identity capture. This is not a login - it records who is using the
- * app so consultation notes can be attributed.
+ * app so consultation notes can be attributed. Credential verification (the
+ * council-ID field in the mockup) arrives in Part 3.
  */
 export default function DoctorIdentity() {
   const router = useRouter();
@@ -90,22 +97,51 @@ export default function DoctorIdentity() {
   return (
     <Screen>
       <Card>
-        <Text style={styles.heading}>Who is on duty?</Text>
+        <View style={styles.topRow}>
+          <View style={styles.verifiedPill}>
+            <Icon name="verified_user" size={16} color={colors.onSecondaryContainer} />
+            <Text style={styles.verifiedText}>Verified Clinical Network</Text>
+          </View>
+          <Text style={styles.stepText}>Step 1 of 1</Text>
+        </View>
+
+        <Text style={styles.title}>Physician Portal Onboarding</Text>
         <Text style={styles.body}>
-          No password in this build - this just tags the notes you write. The
-          session ends when you close the app.
+          Identify yourself to access the patient queue, triage telemetry and
+          clinical notes. No password in this build - this tags the notes you
+          write, and the session ends when you close the app.
         </Text>
+
+        <View style={styles.assuranceGrid}>
+          {ASSURANCES.map((item) => (
+            <View key={item.title} style={styles.assurance}>
+              <View style={styles.assuranceIcon}>
+                <Icon name={item.icon} size={18} color={colors.onDoctor} />
+              </View>
+              <View style={styles.assuranceBody}>
+                <Text style={styles.assuranceTitle} numberOfLines={1}>
+                  {item.title}
+                </Text>
+                <Text style={styles.assuranceCaption} numberOfLines={1}>
+                  {item.caption}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
       </Card>
 
       {error ? <ErrorBanner message={error} /> : null}
 
-      <View style={styles.form}>
+      <Card style={styles.formCard}>
         <TextField
-          label="Your name"
+          label="Full Practitioner Name"
+          labelIcon="badge"
           value={name}
           onChangeText={setName}
           placeholder="e.g. Anita Sharma"
           autoCapitalize="words"
+          hint="As inscribed in the State or National Medical Register."
         />
         <ChoiceChips
           label="Specialization"
@@ -117,6 +153,7 @@ export default function DoctorIdentity() {
         {specialization === "Other" ? (
           <TextField
             label="Specialization"
+            labelIcon="clinical_notes"
             value={customSpecialization}
             onChangeText={setCustomSpecialization}
             placeholder="Enter your specialization"
@@ -129,12 +166,13 @@ export default function DoctorIdentity() {
           selectedId={facilityId}
           onSelect={setFacilityId}
           emptyLabel="Not attached to a facility"
-          hint="Sets the default facility whose stock you keep up to date."
+          hint="Sets the default facility whose stock and dashboard you manage."
         />
-      </View>
+      </Card>
 
       <Button
         title="Start session"
+        icon="login"
         onPress={handleSubmit}
         loading={submitting}
         tone="doctor"
@@ -144,7 +182,52 @@ export default function DoctorIdentity() {
 }
 
 const styles = StyleSheet.create({
-  heading: { fontSize: 20, fontWeight: "700", color: colors.text },
-  body: { fontSize: 15, color: colors.muted, lineHeight: 21 },
-  form: { gap: spacing.lg },
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
+  verifiedPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.secondaryContainer,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  verifiedText: { ...type.labelMd, color: colors.onSecondaryContainer },
+  stepText: { ...type.labelMd, color: colors.faint },
+
+  title: { ...type.headlineMd, color: colors.text, marginTop: spacing.xs },
+  body: { ...type.bodyMd, color: colors.muted },
+
+  assuranceGrid: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  assurance: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceContainer,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  assuranceIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    backgroundColor: colors.doctor,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  assuranceBody: { flex: 1, minWidth: 0 },
+  assuranceTitle: { ...type.labelMd, color: colors.text },
+  assuranceCaption: { ...type.labelMd, fontSize: 14, color: colors.muted },
+
+  formCard: { gap: spacing.md },
 });

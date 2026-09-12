@@ -67,7 +67,7 @@ function post<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
-function patch<T>(path: string, body: unknown): Promise<T> {
+function patch_<T>(path: string, body: unknown): Promise<T> {
   return request<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 }
 
@@ -133,6 +133,9 @@ export type ConsultationNote = {
   note_text: string;
   is_high_risk: boolean;
   high_risk_reason: string | null;
+  /** ISO date (YYYY-MM-DD), or null when no check-in is scheduled. */
+  follow_up_due_date: string | null;
+  follow_up_resolved: boolean;
   created_at: string;
   doctor: Doctor;
   referred_to_facility: FacilitySummary | null;
@@ -170,6 +173,50 @@ export type QueueItem = {
   latest_triage_source: TriageSource | null;
   triage_count: number;
   note_count: number;
+};
+
+export type FollowUpItem = {
+  note_id: number;
+  unique_code: string;
+  name: string;
+  age: number;
+  gender: string;
+  village: string;
+  phone: string;
+  follow_up_due_date: string;
+  /** 0 on the day it falls due, growing after that. */
+  days_overdue: number;
+  is_high_risk: boolean;
+  high_risk_reason: string | null;
+  note_text: string;
+  doctor_name: string;
+  created_at: string;
+};
+
+/** `rate` is null when nothing was due - show "nothing yet", not 0%. */
+export type RateStat = {
+  completed: number;
+  total: number;
+  rate: number | null;
+};
+
+export type PatientLoad = {
+  value: number;
+  is_proxy: boolean;
+  basis: string;
+  referred_patients: number;
+  seen_by_facility_doctors: number;
+  stock_updates: number;
+};
+
+export type FacilityDashboard = {
+  facility: FacilitySummary;
+  window_days: number;
+  from_date: string;
+  to_date: string;
+  patient_load: PatientLoad;
+  referral_completion_rate: RateStat;
+  follow_up_completion_rate: RateStat;
 };
 
 export type Consultation = {
@@ -213,8 +260,18 @@ export const api = {
       is_high_risk: boolean;
       high_risk_reason?: string | null;
       referred_to_facility_id?: number | null;
+      follow_up_due_date?: string | null;
     },
   ) => post<ConsultationNote>(`/patients/${code(unique)}/notes`, note),
+
+  /**
+   * Reschedule or close a follow-up. Pass follow_up_due_date: null to clear it;
+   * omit the key entirely to leave it untouched.
+   */
+  updateFollowUp: (
+    noteId: number,
+    patch: { follow_up_due_date?: string | null; follow_up_resolved?: boolean },
+  ) => patch_<ConsultationNote>(`/notes/${noteId}/follow-up`, patch),
 
   // Doctors
   createDoctor: (draft: {
@@ -228,17 +285,24 @@ export const api = {
 
   getHighRiskQueue: () => request<QueueItem[]>("/triage/high-risk"),
 
+  getFollowUpsDue: () => request<FollowUpItem[]>("/triage/follow-ups-due"),
+
   updateTriageStatus: (entryId: number, status: TriageStatus) =>
-    patch<TriageEntry>(`/triage/${entryId}/status`, { status }),
+    patch_<TriageEntry>(`/triage/${entryId}/status`, { status }),
 
   // Facilities and stock
   getFacilities: () => request<Facility[]>("/facilities"),
+
+  getFacilityDashboard: (facilityId: number, days: number) =>
+    request<FacilityDashboard>(
+      `/facilities/${facilityId}/dashboard?days=${days}`,
+    ),
 
   getFacilityStock: (facilityId: number) =>
     request<StockItem[]>(`/facilities/${facilityId}/stock`),
 
   updateStockItem: (facilityId: number, itemId: number, available: boolean) =>
-    patch<StockItem>(`/facilities/${facilityId}/stock/${itemId}`, { available }),
+    patch_<StockItem>(`/facilities/${facilityId}/stock/${itemId}`, { available }),
 
   // Referrals
   createReferral: (draft: {
@@ -249,7 +313,7 @@ export const api = {
   }) => post<Referral>("/referrals", draft),
 
   updateReferralStatus: (referralId: number, status: ReferralStatus) =>
-    patch<Referral>(`/referrals/${referralId}/status`, { status }),
+    patch_<Referral>(`/referrals/${referralId}/status`, { status }),
 
   // Teleconsultation
   startConsultation: (unique: string, doctorId: number) =>

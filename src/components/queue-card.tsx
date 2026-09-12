@@ -1,9 +1,10 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { Badge, Tone } from "@/components/ui";
+import { Icon } from "@/components/icon";
+import { Badge, SoftBadge, Tone } from "@/components/ui";
 import { QueueItem, TriageStatus } from "@/lib/api";
 import { timeAgo } from "@/lib/format";
-import { colors, radius, shadow, spacing } from "@/lib/theme";
+import { colors, elevation, radius, spacing, touch, type } from "@/lib/theme";
 
 export const TRIAGE_STATUS_META: Record<
   TriageStatus,
@@ -15,13 +16,17 @@ export const TRIAGE_STATUS_META: Record<
 };
 
 /** The status a doctor would move to next, and the label for that button. */
-const NEXT_ACTION: Record<TriageStatus, { to: TriageStatus; label: string } | null> = {
-  WAITING: { to: "IN_PROGRESS", label: "Start consult" },
-  IN_PROGRESS: { to: "DONE", label: "Mark done" },
-  DONE: { to: "WAITING", label: "Reopen" },
-};
+const NEXT_ACTION: Record<TriageStatus, { to: TriageStatus; label: string; icon: string }> =
+  {
+    WAITING: { to: "IN_PROGRESS", label: "Start consult", icon: "play_arrow" },
+    IN_PROGRESS: { to: "DONE", label: "Mark done", icon: "check" },
+    DONE: { to: "WAITING", label: "Reopen", icon: "restart_alt" },
+  };
 
-/** One row in the doctor queue / high-risk worklist. */
+/**
+ * Doctor patient-row card. The left edge is colour-coded by triage level, per
+ * DESIGN.md: amber for high risk / caution, green for normal.
+ */
 export function QueueCard({
   item,
   onPress,
@@ -38,86 +43,100 @@ export function QueueCard({
   const statusMeta = status ? TRIAGE_STATUS_META[status] : null;
   const next = status ? NEXT_ACTION[status] : null;
   const fromPhone = item.latest_triage_source === "voice_call";
+  const edgeColor = item.is_high_risk ? colors.warning : colors.success;
 
   return (
-    <View style={[styles.card, item.is_high_risk && styles.cardHighRisk]}>
-      <Pressable
-        accessibilityRole="button"
-        onPress={onPress}
-        style={({ pressed }) => [styles.body, pressed && styles.pressed]}
-      >
-        <View style={styles.topRow}>
-          <Text style={styles.name} numberOfLines={1}>
-            {item.name}
-          </Text>
-          {item.is_high_risk ? <Badge label="HIGH RISK" tone="danger" /> : null}
-        </View>
-
-        <View style={styles.badgeRow}>
-          <Text style={styles.code}>{item.unique_code}</Text>
-          {statusMeta ? (
-            <Badge label={statusMeta.short} tone={statusMeta.tone} />
-          ) : null}
-          <Badge
-            label={fromPhone ? "📞 PHONE CALL" : "📱 APP"}
-            tone={fromPhone ? "warning" : "neutral"}
-          />
-        </View>
-
-        <Text style={styles.meta}>
-          {item.age} years - {item.gender} - {item.village}
-        </Text>
-
-        {item.latest_triage_summary ? (
-          <Text style={styles.summary} numberOfLines={2}>
-            {item.latest_triage_summary}
-          </Text>
-        ) : (
-          <Text style={styles.noTriage}>No symptom check submitted yet</Text>
-        )}
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            {item.latest_triage_at
-              ? `Last check ${timeAgo(item.latest_triage_at)}`
-              : "Flagged by a doctor"}
-          </Text>
-          <Text style={styles.footerText}>
-            {item.note_count} note{item.note_count === 1 ? "" : "s"}
-          </Text>
-        </View>
-      </Pressable>
-
-      {onSetStatus && next && item.latest_triage_id !== null ? (
+    <View style={styles.card}>
+      <View style={[styles.edge, { backgroundColor: edgeColor }]} />
+      <View style={styles.inner}>
         <Pressable
           accessibilityRole="button"
-          disabled={busy}
-          onPress={() => onSetStatus(item.latest_triage_id!, next.to)}
-          style={({ pressed }) => [
-            styles.statusAction,
-            pressed && styles.pressed,
-            busy && { opacity: 0.5 },
-          ]}
+          onPress={onPress}
+          style={({ pressed }) => [styles.body, pressed && styles.pressed]}
         >
-          <Text style={styles.statusActionText}>{next.label}</Text>
+          <View style={styles.topRow}>
+            <Text style={styles.name} numberOfLines={1}>
+              {item.name}
+            </Text>
+            {item.is_high_risk ? (
+              <Badge label="HIGH RISK" tone="warning" icon="warning" />
+            ) : null}
+          </View>
+
+          <View style={styles.badgeRow}>
+            <Text style={styles.code}>{item.unique_code}</Text>
+            {statusMeta ? (
+              <SoftBadge label={statusMeta.short} tone={statusMeta.tone} />
+            ) : null}
+            <View style={styles.sourceRow}>
+              <Icon
+                name={fromPhone ? "call" : "smartphone"}
+                size={14}
+                color={colors.muted}
+              />
+              <Text style={styles.sourceText}>
+                {fromPhone ? "Phone call" : "App"}
+              </Text>
+            </View>
+          </View>
+
+          <Text style={styles.meta}>
+            {item.age} yrs · {item.gender} · {item.village}
+          </Text>
+
+          {item.latest_triage_summary ? (
+            <Text style={styles.summary} numberOfLines={2}>
+              {item.latest_triage_summary}
+            </Text>
+          ) : (
+            <Text style={styles.noTriage}>No symptom check submitted yet</Text>
+          )}
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>
+              {item.latest_triage_at
+                ? `Last check ${timeAgo(item.latest_triage_at)}`
+                : "Flagged by a doctor"}
+            </Text>
+            <Text style={styles.footerText}>
+              {item.note_count} note{item.note_count === 1 ? "" : "s"}
+            </Text>
+          </View>
         </Pressable>
-      ) : null}
+
+        {onSetStatus && next && item.latest_triage_id !== null ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={busy}
+            onPress={() => onSetStatus(item.latest_triage_id!, next.to)}
+            style={({ pressed }) => [
+              styles.statusAction,
+              pressed && styles.pressed,
+              busy && styles.busy,
+            ]}
+          >
+            <Icon name={next.icon} size={20} color={colors.doctor} />
+            <Text style={styles.statusActionText}>{next.label}</Text>
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
+    ...elevation.level1,
+    flexDirection: "row",
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     overflow: "hidden",
-    ...shadow,
   },
-  cardHighRisk: { borderColor: "#F3C9C9", borderWidth: 1.5 },
-  body: { padding: spacing.lg, gap: spacing.xs },
-  pressed: { opacity: 0.85 },
+  /** Triage level, readable at a glance down a long list. */
+  edge: { width: 6 },
+  inner: { flex: 1 },
+  body: { padding: spacing.md, gap: spacing.xs },
+  pressed: { opacity: 0.9 },
+  busy: { opacity: 0.5 },
 
   topRow: {
     flexDirection: "row",
@@ -125,22 +144,19 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: spacing.sm,
   },
-  name: { flex: 1, fontSize: 18, fontWeight: "700", color: colors.text },
+  name: { flex: 1, ...type.headlineMd, color: colors.text },
   badgeRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
     flexWrap: "wrap",
   },
-  code: { fontSize: 14, fontWeight: "700", color: colors.doctor, letterSpacing: 0.5 },
-  meta: { fontSize: 13, color: colors.muted },
-  summary: {
-    fontSize: 15,
-    color: colors.text,
-    lineHeight: 21,
-    marginTop: spacing.xs,
-  },
-  noTriage: { fontSize: 14, color: colors.faint, fontStyle: "italic" },
+  code: { ...type.labelLg, color: colors.doctor, letterSpacing: 0.5 },
+  sourceRow: { flexDirection: "row", alignItems: "center", gap: 2 },
+  sourceText: { ...type.labelMd, color: colors.muted },
+  meta: { ...type.bodyMd, color: colors.muted },
+  summary: { ...type.bodyLg, color: colors.text, marginTop: spacing.xs },
+  noTriage: { ...type.bodyMd, color: colors.faint, fontStyle: "italic" },
 
   footer: {
     flexDirection: "row",
@@ -150,14 +166,17 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     marginTop: spacing.sm,
   },
-  footerText: { fontSize: 12, color: colors.faint, fontWeight: "600" },
+  footerText: { ...type.labelMd, color: colors.faint },
 
   statusAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    minHeight: touch.doctorAction,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     backgroundColor: colors.doctorTint,
-    paddingVertical: spacing.md,
-    alignItems: "center",
   },
-  statusActionText: { color: colors.doctor, fontWeight: "700", fontSize: 15 },
+  statusActionText: { ...type.labelLg, color: colors.doctor },
 });

@@ -217,6 +217,6 @@ const styles = StyleSheet.create({
   itemName: { fontSize: 16, color: colors.text, fontWeight: "500" },
   itemState: { fontSize: 13, fontWeight: "600" },
   inStock: { color: colors.success },
-  outStock: { color: colors.danger },
+  outStock: { color: colors.warning },
   updated: { fontSize: 12, color: colors.faint, textAlign: "center" },
 });

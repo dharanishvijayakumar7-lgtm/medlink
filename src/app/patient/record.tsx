@@ -1,28 +1,28 @@
 import { useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { Icon } from "@/components/icon";
 import { ReferralCard } from "@/components/referral-card";
 import {
-  Badge,
-  Card,
   EmptyState,
   ErrorBanner,
   Loading,
   Screen,
-  SectionTitle,
+  SoftBadge,
   Tone,
 } from "@/components/ui";
 import {
   api,
   ConsultationNote,
   PatientRecord,
+  Referral,
   TriageEntry,
   TriageStatus,
 } from "@/lib/api";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatIsoDate } from "@/lib/format";
 import { usePatientSession } from "@/lib/patient-session";
-import { colors, radius, spacing } from "@/lib/theme";
+import { colors, elevation, radius, spacing, type } from "@/lib/theme";
 
 const TRIAGE_STATUS_META: Record<TriageStatus, { label: string; tone: Tone }> = {
   WAITING: { label: "WAITING", tone: "warning" },
@@ -30,20 +30,60 @@ const TRIAGE_STATUS_META: Record<TriageStatus, { label: string; tone: Tone }> = 
   DONE: { label: "REVIEWED", tone: "success" },
 };
 
-function TriageCard({ entry }: { entry: TriageEntry }) {
+/** One chronological stream, as the Health Timeline mockup shows. */
+type TimelineEntry =
+  | { kind: "triage"; at: string; entry: TriageEntry }
+  | { kind: "note"; at: string; note: ConsultationNote }
+  | { kind: "referral"; at: string; referral: Referral };
+
+function TimelineHeading({ at }: { at: string }) {
+  return (
+    <View style={styles.timeRow}>
+      <Icon name="calendar_today" size={18} color={colors.patient} />
+      <Text style={styles.timeText}>{formatDateTime(at).toUpperCase()}</Text>
+    </View>
+  );
+}
+
+function EntryCard({
+  icon,
+  category,
+  title,
+  children,
+}: {
+  icon: string;
+  category: string;
+  title: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <View style={styles.entryCard}>
+      <View style={styles.entryTop}>
+        <View style={styles.entryIcon}>
+          <Icon name={icon} size={28} color={colors.onPrimaryFixed} />
+        </View>
+        <View style={styles.entryHeading}>
+          <Text style={styles.entryCategory}>{category}</Text>
+          <Text style={styles.entryTitle}>{title}</Text>
+        </View>
+      </View>
+      {children}
+    </View>
+  );
+}
+
+function TriageBlock({ entry }: { entry: TriageEntry }) {
   const [expanded, setExpanded] = useState(false);
-  const statusMeta = TRIAGE_STATUS_META[entry.status];
+  const meta = TRIAGE_STATUS_META[entry.status];
 
   return (
-    <Card>
-      <View style={styles.badgeRow}>
-        <Badge label={statusMeta.label} tone={statusMeta.tone} />
+    <EntryCard icon="monitor_heart" category="SYMPTOM CHECK" title={entry.summary}>
+      <View style={styles.chipRow}>
+        <SoftBadge label={meta.label} tone={meta.tone} />
         {entry.source === "voice_call" ? (
-          <Badge label="📞 PHONE CALL" tone="neutral" />
+          <SoftBadge label="PHONE CALL" tone="neutral" />
         ) : null}
       </View>
-      <Text style={styles.timestamp}>{formatDateTime(entry.created_at)}</Text>
-      <Text style={styles.summary}>{entry.summary}</Text>
 
       {expanded ? (
         <View style={styles.answers}>
@@ -56,47 +96,63 @@ function TriageCard({ entry }: { entry: TriageEntry }) {
         </View>
       ) : null}
 
-      <Pressable onPress={() => setExpanded(!expanded)} hitSlop={8}>
-        <Text style={styles.toggle}>
-          {expanded ? "Hide answers" : `Show all ${entry.answers.length} answers`}
-        </Text>
-      </Pressable>
-    </Card>
+      {entry.answers.length > 0 ? (
+        <Pressable onPress={() => setExpanded(!expanded)} hitSlop={12}>
+          <Text style={styles.toggle}>
+            {expanded ? "Hide answers" : `Show all ${entry.answers.length} answers`}
+          </Text>
+        </Pressable>
+      ) : null}
+    </EntryCard>
   );
 }
 
-function NoteCard({ note }: { note: ConsultationNote }) {
+function NoteBlock({ note }: { note: ConsultationNote }) {
   return (
-    <Card style={note.is_high_risk ? styles.highRiskCard : undefined}>
-      <View style={styles.badgeRow}>
-        {note.is_high_risk ? <Badge label="HIGH RISK" tone="danger" /> : null}
-        {note.referred_to_facility ? <Badge label="REFERRED" tone="warning" /> : null}
+    <EntryCard
+      icon="stethoscope"
+      category="DOCTOR NOTE"
+      title={note.is_high_risk ? "Follow-up advised" : "Clinical note"}
+    >
+      <View style={styles.chipRow}>
+        {note.is_high_risk ? <SoftBadge label="HIGH RISK" tone="warning" /> : null}
+        {note.follow_up_due_date ? (
+          <SoftBadge
+            label={
+              note.follow_up_resolved
+                ? "FOLLOW-UP DONE"
+                : `DUE ${formatIsoDate(note.follow_up_due_date).toUpperCase()}`
+            }
+            tone={note.follow_up_resolved ? "success" : "warning"}
+          />
+        ) : null}
       </View>
 
-      <Text style={styles.timestamp}>{formatDateTime(note.created_at)}</Text>
-      <Text style={styles.noteText}>{note.note_text}</Text>
+      <View style={styles.quoteBox}>
+        <View style={styles.quoteHead}>
+          <Icon name="stethoscope" size={20} color={colors.patient} />
+          <Text style={styles.quoteDoctor}>Dr. {note.doctor.name}</Text>
+          <Text style={styles.quoteRole}>· {note.doctor.specialization}</Text>
+        </View>
+        <Text style={styles.quoteText}>“{note.note_text}”</Text>
+      </View>
 
       {note.is_high_risk && note.high_risk_reason ? (
-        <View style={styles.calloutDanger}>
-          <Text style={styles.calloutLabel}>Reason for follow-up</Text>
+        <View style={styles.callout}>
+          <Text style={styles.calloutLabel}>REASON FOR FOLLOW-UP</Text>
           <Text style={styles.calloutBody}>{note.high_risk_reason}</Text>
         </View>
       ) : null}
 
       {note.referred_to_facility ? (
-        <View style={styles.calloutWarning}>
-          <Text style={styles.calloutLabel}>Referred to</Text>
+        <View style={styles.callout}>
+          <Text style={styles.calloutLabel}>REFERRED TO</Text>
           <Text style={styles.calloutBody}>
             {note.referred_to_facility.name} ({note.referred_to_facility.type})
           </Text>
-          <Text style={styles.calloutMeta}>{note.referred_to_facility.area_label}</Text>
         </View>
       ) : null}
-
-      <Text style={styles.author}>
-        Dr. {note.doctor.name} - {note.doctor.specialization}
-      </Text>
-    </Card>
+    </EntryCard>
   );
 }
 
@@ -127,104 +183,179 @@ export default function MyRecord() {
     }, [load]),
   );
 
+  const timeline = useMemo<TimelineEntry[]>(() => {
+    if (!record) return [];
+    const entries: TimelineEntry[] = [
+      ...record.triage_entries.map(
+        (entry): TimelineEntry => ({ kind: "triage", at: entry.created_at, entry }),
+      ),
+      ...record.notes.map(
+        (note): TimelineEntry => ({ kind: "note", at: note.created_at, note }),
+      ),
+      ...record.referrals.map(
+        (referral): TimelineEntry => ({
+          kind: "referral",
+          at: referral.created_at,
+          referral,
+        }),
+      ),
+    ];
+    return entries.sort((a, b) => (a.at < b.at ? 1 : -1));
+  }, [record]);
+
   if (loading && !record) return <Loading label="Loading your record..." />;
 
   return (
     <Screen refreshing={loading} onRefresh={load}>
+      <View style={styles.header}>
+        <View style={styles.headerIcon}>
+          <Icon name="history_edu" size={24} color={colors.onPatient} />
+        </View>
+        <View style={styles.headerBody}>
+          <Text style={styles.headerTitle}>Health Timeline</Text>
+          <Text style={styles.headerSubtitle}>
+            {timeline.length} clinical{" "}
+            {timeline.length === 1 ? "entry" : "entries"}
+          </Text>
+        </View>
+      </View>
+
       {error ? <ErrorBanner message={error} onRetry={load} /> : null}
 
       {record ? (
-        <Card>
-          <Text style={styles.name}>{record.name}</Text>
-          <Text style={styles.meta}>
-            {record.age} years - {record.gender} - {record.village}
+        <View style={styles.patientCard}>
+          <Text style={styles.patientName}>{record.name}</Text>
+          <Text style={styles.patientMeta}>
+            {record.unique_code} · {record.age} yrs · {record.gender}
           </Text>
-          <Text style={styles.meta}>
-            {record.unique_code} - {record.phone} - speaks{" "}
-            {record.preferred_language}
+          <Text style={styles.patientMeta}>
+            {record.village} · {record.phone} · speaks {record.preferred_language}
           </Text>
-        </Card>
+        </View>
       ) : null}
 
-      <SectionTitle>Symptom checks</SectionTitle>
-      {record && record.triage_entries.length > 0 ? (
-        record.triage_entries.map((entry) => (
-          <TriageCard key={entry.id} entry={entry} />
-        ))
-      ) : (
+      {timeline.length === 0 ? (
         <EmptyState
-          title="No symptom checks yet"
-          body="Run a symptom check from your home screen."
+          icon="history_edu"
+          title="Nothing on your timeline yet"
+          body="Run a symptom check from your home screen to start your record."
         />
-      )}
-
-      <SectionTitle>Referrals</SectionTitle>
-      {record && record.referrals.length > 0 ? (
-        record.referrals.map((referral) => (
-          <ReferralCard key={referral.id} referral={referral} audience="patient" />
-        ))
       ) : (
-        <EmptyState
-          title="No referrals yet"
-          body="If a doctor sends you to another facility, you can follow it here."
-        />
-      )}
-
-      <SectionTitle>Doctor notes</SectionTitle>
-      {record && record.notes.length > 0 ? (
-        record.notes.map((note) => <NoteCard key={note.id} note={note} />)
-      ) : (
-        <EmptyState
-          title="No doctor notes yet"
-          body="Notes appear here after a doctor reviews your record."
-        />
+        timeline.map((item) => {
+          if (item.kind === "triage") {
+            return (
+              <View key={`t-${item.entry.id}`} style={styles.timelineItem}>
+                <TimelineHeading at={item.at} />
+                <TriageBlock entry={item.entry} />
+              </View>
+            );
+          }
+          if (item.kind === "note") {
+            return (
+              <View key={`n-${item.note.id}`} style={styles.timelineItem}>
+                <TimelineHeading at={item.at} />
+                <NoteBlock note={item.note} />
+              </View>
+            );
+          }
+          return (
+            <View key={`r-${item.referral.id}`} style={styles.timelineItem}>
+              <TimelineHeading at={item.at} />
+              <ReferralCard referral={item.referral} audience="patient" />
+            </View>
+          );
+        })
       )}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  name: { fontSize: 20, fontWeight: "700", color: colors.text },
-  meta: { fontSize: 14, color: colors.muted },
-
-  timestamp: { fontSize: 12, fontWeight: "600", color: colors.faint },
-  summary: { fontSize: 16, color: colors.text, lineHeight: 22, fontWeight: "500" },
-  toggle: { fontSize: 14, fontWeight: "600", color: colors.patient, paddingTop: 2 },
-
-  answers: {
-    gap: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: spacing.md,
-    marginTop: spacing.xs,
+  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  headerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryContainer,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  answerRow: { gap: 2 },
-  answerQuestion: { fontSize: 13, color: colors.faint, fontWeight: "600" },
-  answerValue: { fontSize: 15, color: colors.text },
+  headerBody: { flex: 1 },
+  headerTitle: { ...type.headlineMd, color: colors.text },
+  headerSubtitle: { ...type.bodyMd, color: colors.muted },
 
-  highRiskCard: { borderColor: "#F3C9C9", borderWidth: 1.5 },
-  badgeRow: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
-  noteText: { fontSize: 16, color: colors.text, lineHeight: 23 },
-  author: { fontSize: 13, color: colors.muted, fontWeight: "600" },
-
-  calloutDanger: {
-    backgroundColor: colors.dangerTint,
-    borderRadius: radius.md,
+  patientCard: {
+    ...elevation.level1,
+    borderRadius: radius.lg,
     padding: spacing.md,
     gap: 2,
   },
-  calloutWarning: {
+  patientName: { ...type.headlineMd, color: colors.text },
+  patientMeta: { ...type.bodyMd, color: colors.muted },
+
+  timelineItem: { gap: spacing.xs },
+  timeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingLeft: spacing.xs,
+  },
+  timeText: { ...type.labelLg, color: colors.patient, letterSpacing: 0.6 },
+
+  entryCard: {
+    ...elevation.level1,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  entryTop: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  entryIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.tile,
+    backgroundColor: colors.patientTint,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  entryHeading: { flex: 1, minWidth: 0 },
+  entryCategory: { ...type.labelMd, color: colors.muted, letterSpacing: 0.8 },
+  entryTitle: { ...type.headlineMd, color: colors.text },
+
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
+
+  quoteBox: {
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  quoteHead: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  quoteDoctor: { ...type.labelLg, color: colors.text },
+  quoteRole: { ...type.bodyMd, color: colors.muted, flexShrink: 1 },
+  quoteText: {
+    ...type.bodyXl,
+    color: colors.text,
+    fontStyle: "italic",
+    paddingLeft: spacing.sm,
+  },
+
+  callout: {
     backgroundColor: colors.warningTint,
     borderRadius: radius.md,
     padding: spacing.md,
     gap: 2,
   },
-  calloutLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-    color: colors.muted,
+  calloutLabel: { ...type.labelMd, color: colors.muted, letterSpacing: 0.6 },
+  calloutBody: { ...type.bodyLg, color: colors.text },
+
+  answers: {
+    gap: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.sm,
   },
-  calloutBody: { fontSize: 15, color: colors.text, lineHeight: 21 },
-  calloutMeta: { fontSize: 13, color: colors.muted },
+  answerRow: { gap: 2 },
+  answerQuestion: { ...type.labelMd, color: colors.faint },
+  answerValue: { ...type.bodyLg, color: colors.text },
+  toggle: { ...type.labelLg, color: colors.patient },
 });

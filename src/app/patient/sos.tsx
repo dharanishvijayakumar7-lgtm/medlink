@@ -6,7 +6,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Button, Card, ErrorBanner, Screen } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
-import { colors, radius, shadow, spacing } from "@/lib/theme";
+import { colors, elevation, radius, spacing } from "@/lib/theme";
 
 const EMERGENCY_NUMBER = "112";
 
@@ -116,7 +116,7 @@ export default function EmergencySOS() {
             <Button
               title={copied ? "✓  Copied" : "Copy location"}
               onPress={copyLocation}
-              tone="danger"
+              tone="emergency"
               variant="outline"
             />
           </>
@@ -145,7 +145,7 @@ export default function EmergencySOS() {
 
 const styles = StyleSheet.create({
   callCard: {
-    backgroundColor: colors.danger,
+    backgroundColor: colors.emergency,
     borderColor: "#9E1F1F",
     alignItems: "center",
     gap: spacing.sm,
@@ -170,9 +170,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
     marginTop: spacing.sm,
-    ...shadow,
   },
-  callButtonText: { color: colors.danger, fontSize: 18, fontWeight: "800" },
+  callButtonText: { color: colors.emergency, fontSize: 18, fontWeight: "800" },
 
   sectionHeading: { fontSize: 17, fontWeight: "700", color: colors.text },
   coordBlock: {

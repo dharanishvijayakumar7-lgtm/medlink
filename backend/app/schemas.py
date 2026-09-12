@@ -1,6 +1,6 @@
 """Request/response schemas."""
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -41,6 +41,49 @@ class FacilityOut(FacilitySummary):
     """Facility with its stock, so the patient sees it before travelling."""
 
     stock: list[StockItemOut]
+
+
+# --- Facility dashboard -----------------------------------------------------
+
+
+class RateStat(BaseModel):
+    """A completion rate over a window.
+
+    ``rate`` is null rather than 0.0 when nothing was due, so the dashboard can
+    say "nothing due yet" instead of showing a misleading 0%.
+    """
+
+    completed: int
+    total: int
+    rate: float | None
+
+
+class PatientLoad(BaseModel):
+    """How busy a facility has been.
+
+    ``is_proxy`` is true because triage entries are not facility-linked: a
+    symptom check records the patient, not where they were seen. Until that
+    link exists this counts distinct patients *connected* to the facility -
+    referred to it, or seen by a doctor attached to it - which understates real
+    footfall. ``basis`` spells that out for whoever reads the number.
+    """
+
+    value: int
+    is_proxy: bool
+    basis: str
+    referred_patients: int
+    seen_by_facility_doctors: int
+    stock_updates: int
+
+
+class FacilityDashboard(BaseModel):
+    facility: FacilitySummary
+    window_days: int
+    from_date: date
+    to_date: date
+    patient_load: PatientLoad
+    referral_completion_rate: RateStat
+    follow_up_completion_rate: RateStat
 
 
 # --- Doctors ----------------------------------------------------------------
@@ -135,6 +178,8 @@ class ConsultationNoteCreate(BaseModel):
     is_high_risk: bool = False
     high_risk_reason: str | None = None
     referred_to_facility_id: int | None = None
+    # Optional, and only kept alongside a high-risk flag.
+    follow_up_due_date: date | None = None
 
 
 class ConsultationNoteOut(BaseModel):
@@ -144,9 +189,50 @@ class ConsultationNoteOut(BaseModel):
     note_text: str
     is_high_risk: bool
     high_risk_reason: str | None
+    follow_up_due_date: date | None
+    follow_up_resolved: bool
     created_at: datetime
     doctor: DoctorOut
     referred_to_facility: FacilitySummary | None
+
+
+class FollowUpUpdate(BaseModel):
+    """Patch a note's follow-up.
+
+    Both fields are optional, and an explicit null due date clears it. The
+    router reads ``model_fields_set`` to tell "clear this" from "leave alone".
+    """
+
+    follow_up_due_date: date | None = None
+    follow_up_resolved: bool | None = None
+
+    @model_validator(mode="after")
+    def require_one_field(self) -> "FollowUpUpdate":
+        if not self.model_fields_set:
+            raise ValueError(
+                "Provide follow_up_due_date, follow_up_resolved, or both."
+            )
+        return self
+
+
+class FollowUpItem(BaseModel):
+    """One patient who is due a check-in."""
+
+    note_id: int
+    unique_code: str
+    name: str
+    age: int
+    gender: str
+    village: str
+    phone: str
+    follow_up_due_date: date
+    # 0 on the day it falls due, growing after that.
+    days_overdue: int
+    is_high_risk: bool
+    high_risk_reason: str | None
+    note_text: str
+    doctor_name: str
+    created_at: datetime
 
 
 # --- Referrals --------------------------------------------------------------

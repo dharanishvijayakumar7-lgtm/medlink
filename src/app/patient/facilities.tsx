@@ -1,19 +1,12 @@
 import { useFocusEffect } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
-import {
-  Badge,
-  Card,
-  ChoiceChips,
-  EmptyState,
-  ErrorBanner,
-  Loading,
-  Screen,
-} from "@/components/ui";
+import { Icon } from "@/components/icon";
+import { EmptyState, ErrorBanner, Loading, Screen } from "@/components/ui";
 import { api, Facility, StockItem } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
-import { colors, radius, spacing } from "@/lib/theme";
+import { colors, elevation, radius, spacing, type } from "@/lib/theme";
 
 const ALL = "All";
 
@@ -21,22 +14,29 @@ function countAvailable(items: StockItem[]) {
   return items.filter((item) => item.available).length;
 }
 
-function StockLine({ items }: { items: StockItem[] }) {
+function StockList({ items }: { items: StockItem[] }) {
   return (
     <View style={styles.stockList}>
       {items.map((item) => (
         <View key={item.id} style={styles.stockRow}>
-          <Text style={[styles.stockMark, item.available ? styles.inStock : styles.outStock]}>
-            {item.available ? "✓" : "✕"}
-          </Text>
+          <Icon
+            name={item.available ? "check_circle" : "cancel"}
+            size={18}
+            color={item.available ? colors.success : colors.warning}
+          />
           <Text
             style={[styles.stockName, !item.available && styles.stockNameOut]}
             numberOfLines={1}
           >
             {item.item_name}
           </Text>
-          <Text style={styles.stockState}>
-            {item.available ? "In stock" : "Out of stock"}
+          <Text
+            style={[
+              styles.stockState,
+              { color: item.available ? colors.success : colors.warning },
+            ]}
+          >
+            {item.available ? "In stock" : "Out"}
           </Text>
         </View>
       ))}
@@ -55,37 +55,53 @@ function FacilityCard({ facility }: { facility: Facility }) {
   );
 
   return (
-    <Card>
-      <Badge label={facility.type.toUpperCase()} tone="patient" />
-      <Text style={styles.name}>{facility.name}</Text>
-      <View style={styles.metaRow}>
-        <Text style={styles.metaIcon}>📍</Text>
-        <Text style={styles.meta}>{facility.area_label}</Text>
+    <View style={styles.card}>
+      <View style={styles.cardTop}>
+        <View style={styles.cardHeading}>
+          <View style={styles.typeChip}>
+            <Text style={styles.typeChipText}>{facility.type.toUpperCase()}</Text>
+          </View>
+          <Text style={styles.facilityName}>{facility.name}</Text>
+        </View>
+        <View style={styles.facilityIcon}>
+          <Icon name="local_hospital" size={24} color={colors.patient} />
+        </View>
+      </View>
+
+      <View style={styles.distanceRow}>
+        <Icon name="near_me" size={20} color={colors.patient} />
+        <Text style={styles.distanceText}>{facility.area_label}</Text>
       </View>
 
       {facility.stock.length > 0 ? (
         <>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summary}>
-              💊 Medicines {countAvailable(medicines)}/{medicines.length}
-            </Text>
-            <Text style={styles.summary}>
-              🔬 Tests {countAvailable(diagnostics)}/{diagnostics.length}
-            </Text>
+          <View style={styles.badgeRow}>
+            <View style={styles.stockBadge}>
+              <Icon name="medication" size={16} color={colors.onPrimaryContainer} />
+              <Text style={styles.stockBadgeText}>
+                Medicines {countAvailable(medicines)}/{medicines.length}
+              </Text>
+            </View>
+            <View style={styles.stockBadgeAlt}>
+              <Icon name="vaccines" size={16} color={colors.onSecondaryContainer} />
+              <Text style={styles.stockBadgeAltText}>
+                Tests {countAvailable(diagnostics)}/{diagnostics.length}
+              </Text>
+            </View>
           </View>
 
           {open ? (
             <>
               {medicines.length > 0 ? (
                 <>
-                  <Text style={styles.groupLabel}>Medicines</Text>
-                  <StockLine items={medicines} />
+                  <Text style={styles.groupLabel}>MEDICINES</Text>
+                  <StockList items={medicines} />
                 </>
               ) : null}
               {diagnostics.length > 0 ? (
                 <>
-                  <Text style={styles.groupLabel}>Tests and diagnostics</Text>
-                  <StockLine items={diagnostics} />
+                  <Text style={styles.groupLabel}>TESTS AND DIAGNOSTICS</Text>
+                  <StockList items={diagnostics} />
                 </>
               ) : null}
               {lastUpdated ? (
@@ -96,8 +112,17 @@ function FacilityCard({ facility }: { facility: Facility }) {
             </>
           ) : null}
 
-          <Pressable onPress={() => setOpen(!open)} hitSlop={8}>
-            <Text style={styles.toggle}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setOpen(!open)}
+            style={({ pressed }) => [styles.expandButton, pressed && styles.pressed]}
+          >
+            <Icon
+              name={open ? "expand_less" : "expand_more"}
+              size={24}
+              color={colors.patient}
+            />
+            <Text style={styles.expandText}>
               {open ? "Hide what is available" : "See what is available"}
             </Text>
           </Pressable>
@@ -105,7 +130,7 @@ function FacilityCard({ facility }: { facility: Facility }) {
       ) : (
         <Text style={styles.noStock}>No stock information yet.</Text>
       )}
-    </Card>
+    </View>
   );
 }
 
@@ -153,20 +178,58 @@ export default function NearbyFacilities() {
   if (loading && facilities.length === 0) return <Loading label="Loading facilities..." />;
 
   return (
-    <Screen refreshing={loading} onRefresh={refresh}>
+    <Screen refreshing={loading} onRefresh={refresh} contentStyle={styles.content}>
+      <View style={styles.locationBanner}>
+        <View style={styles.locationRow}>
+          <Icon name="location_on" size={20} color={colors.patient} />
+          <Text style={styles.locationText}>Government health network</Text>
+        </View>
+        <Text style={styles.bannerTitle}>Nearest medical centres to you</Text>
+        <Text style={styles.bannerBody}>
+          Check what is in stock before you travel.
+        </Text>
+      </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterRow}
+      >
+        {types.map((option) => {
+          const selected = option === filter;
+          const label =
+            option === ALL ? `All (${facilities.length})` : option;
+          return (
+            <Pressable
+              key={option}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+              onPress={() => setFilter(option)}
+              style={[styles.filterPill, selected && styles.filterPillOn]}
+            >
+              {option === ALL ? (
+                <Icon
+                  name="verified"
+                  size={18}
+                  color={selected ? colors.onPatient : colors.text}
+                />
+              ) : null}
+              <Text style={[styles.filterText, selected && styles.filterTextOn]}>
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
       {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
 
-      <Text style={styles.intro}>
-        Government health facilities near you, nearest first. Check what is in stock
-        before you travel.
-      </Text>
-
-      {types.length > 2 ? (
-        <ChoiceChips options={types} value={filter} onChange={setFilter} />
-      ) : null}
-
       {visible.length === 0 ? (
-        <EmptyState title="No facilities found" body="Pull down to refresh." />
+        <EmptyState
+          title="No facilities found"
+          body="Pull down to refresh."
+          icon="local_hospital"
+        />
       ) : (
         visible.map((facility) => (
           <FacilityCard key={facility.id} facility={facility} />
@@ -177,47 +240,120 @@ export default function NearbyFacilities() {
 }
 
 const styles = StyleSheet.create({
-  intro: { fontSize: 15, color: colors.muted, lineHeight: 21 },
-  name: { fontSize: 17, fontWeight: "700", color: colors.text },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  metaIcon: { fontSize: 13 },
-  meta: { fontSize: 14, color: colors.muted },
+  content: { gap: spacing.md },
+  pressed: { opacity: 0.9 },
 
-  summaryRow: {
-    flexDirection: "row",
-    gap: spacing.lg,
-    flexWrap: "wrap",
-    marginTop: spacing.xs,
+  locationBanner: {
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.xs,
   },
-  summary: { fontSize: 14, fontWeight: "600", color: colors.text },
+  locationRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  locationText: { ...type.labelMd, color: colors.patient },
+  bannerTitle: { ...type.headlineMd, color: colors.text },
+  bannerBody: { ...type.bodyMd, color: colors.muted },
+
+  filterRow: { gap: spacing.xs, paddingRight: spacing.md },
+  filterPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    height: 40,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceContainerHigh,
+  },
+  filterPillOn: { backgroundColor: colors.patient },
+  filterText: { ...type.labelMd, color: colors.text },
+  filterTextOn: { color: colors.onPatient },
+
+  card: {
+    ...elevation.level1,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  cardTop: { flexDirection: "row", gap: spacing.xs },
+  cardHeading: { flex: 1, minWidth: 0, gap: spacing.xs },
+  typeChip: {
+    alignSelf: "flex-start",
+    backgroundColor: colors.surfaceContainer,
+    borderRadius: radius.sm,
+    paddingVertical: 2,
+    paddingHorizontal: spacing.xs,
+  },
+  typeChipText: { ...type.labelMd, color: colors.muted, letterSpacing: 0.6 },
+  facilityName: { ...type.headlineMd, color: colors.text },
+  facilityIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.patientTint,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  distanceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: radius.md,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  distanceText: { ...type.bodyMd, color: colors.text, flex: 1 },
+
+  badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
+  stockBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.primaryContainer,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  stockBadgeText: { ...type.labelMd, color: colors.onPrimaryContainer },
+  stockBadgeAlt: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.secondaryContainer,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  stockBadgeAltText: { ...type.labelMd, color: colors.onSecondaryContainer },
 
   groupLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.6,
+    ...type.labelMd,
     color: colors.faint,
-    marginTop: spacing.sm,
+    letterSpacing: 0.6,
+    marginTop: spacing.xs,
   },
   stockList: {
     gap: spacing.xs,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.surfaceContainerLow,
     borderRadius: radius.md,
-    padding: spacing.md,
+    padding: spacing.sm,
   },
   stockRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  stockMark: { fontSize: 14, fontWeight: "900", width: 16 },
-  inStock: { color: colors.success },
-  outStock: { color: colors.danger },
-  stockName: { flex: 1, fontSize: 14, color: colors.text },
+  stockName: { flex: 1, ...type.bodyLg, color: colors.text },
   stockNameOut: { color: colors.muted, textDecorationLine: "line-through" },
-  stockState: { fontSize: 12, color: colors.faint, fontWeight: "600" },
+  stockState: { ...type.labelMd },
 
-  updated: { fontSize: 12, color: colors.faint, marginTop: spacing.sm },
-  toggle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.patient,
-    paddingTop: spacing.sm,
+  updated: { ...type.labelMd, color: colors.faint, marginTop: spacing.xs },
+  expandButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    minHeight: 48,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceContainerHigh,
   },
-  noStock: { fontSize: 13, color: colors.faint, fontStyle: "italic" },
+  expandText: { ...type.labelLg, color: colors.patient },
+  noStock: { ...type.bodyMd, color: colors.faint },
 });

@@ -2,19 +2,22 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 
 import { PatientSessionProvider } from "@/lib/patient-session";
-import { colors } from "@/lib/theme";
+import { colors, type } from "@/lib/theme";
 
 /** The patient navigation stack. Nothing here is shared with the doctor stack. */
 export default function PatientLayout() {
   return (
     <PatientSessionProvider>
-      {/* The teal header sits under the status bar, so it needs light icons. */}
-      <StatusBar style="light" />
+      {/* The header is now the light surface, so the status bar goes dark. */}
+      <StatusBar style="dark" />
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: colors.patient },
-          headerTintColor: "#FFFFFF",
-          headerTitleStyle: { fontWeight: "700" },
+          // Flat surface header: DESIGN.md carries elevation with borders, not
+          // a shadow that washes out in sunlight.
+          headerStyle: { backgroundColor: colors.bg },
+          headerTintColor: colors.patient,
+          headerTitleStyle: { ...type.headlineMd, color: colors.text },
+          headerShadowVisible: false,
           contentStyle: { backgroundColor: colors.bg },
         }}
       >

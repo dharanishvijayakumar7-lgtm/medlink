@@ -1,29 +1,54 @@
 import { useRouter } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { colors, radius, shadow, spacing } from "@/lib/theme";
+import { Icon } from "@/components/icon";
+import { colors, elevation, radius, spacing, type } from "@/lib/theme";
 
 type RoleCardProps = {
+  icon: string;
   title: string;
-  subtitle: string;
-  color: string;
+  description: string;
+  footnoteIcon: string;
+  footnote: string;
+  accent: string;
+  tileBackground: string;
   onPress: () => void;
 };
 
-function RoleCard({ title, subtitle, color, onPress }: RoleCardProps) {
+function RoleCard({
+  icon,
+  title,
+  description,
+  footnoteIcon,
+  footnote,
+  accent,
+  tileBackground,
+  onPress,
+}: RoleCardProps) {
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole="radio"
+      accessibilityState={{ selected: false }}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.roleCard,
-        { backgroundColor: color },
-        pressed && styles.rolePressed,
-      ]}
+      style={({ pressed }) => [styles.roleCard, pressed && styles.pressed]}
     >
-      <Text style={styles.roleTitle}>{title}</Text>
-      <Text style={styles.roleSubtitle}>{subtitle}</Text>
+      <View style={styles.roleTop}>
+        <View style={[styles.roleTile, { backgroundColor: tileBackground }]}>
+          <Icon name={icon} size={36} color={accent} />
+        </View>
+        <Text style={[styles.roleTitle, { color: accent }]}>{title}</Text>
+        <View style={styles.roleArrow}>
+          <Icon name="arrow_forward" size={20} color={colors.faint} />
+        </View>
+      </View>
+
+      <Text style={styles.roleDescription}>{description}</Text>
+
+      <View style={styles.roleFootnote}>
+        <Icon name={footnoteIcon} size={18} color={accent} />
+        <Text style={[styles.roleFootnoteText, { color: accent }]}>{footnote}</Text>
+      </View>
     </Pressable>
   );
 }
@@ -34,33 +59,60 @@ export default function RoleSelect() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <View style={styles.trustPill}>
+          <Icon name="verified_user" size={18} color={colors.patient} />
+          <Text style={styles.trustText}>Verified Clinical Network</Text>
+        </View>
+
         <View style={styles.header}>
-          <Text style={styles.brand}>MedLink</Text>
-          <Text style={styles.tagline}>
-            Voice-first healthcare triage for rural India
+          <View style={styles.headerRow}>
+            <Icon name="health_and_safety" size={32} color={colors.patient} />
+            <Text style={styles.brand}>Welcome to MedLink</Text>
+          </View>
+          <Text style={styles.tagline}>Choose how you are using the app today</Text>
+        </View>
+
+        <View style={styles.banner}>
+          <Text style={styles.bannerLabel}>SAFE &amp; CONFIDENTIAL</Text>
+          <Text style={styles.bannerText}>
+            Fast access to diagnosis, telemedicine &amp; local care
           </Text>
         </View>
 
-        <View style={styles.roles}>
+        <View style={styles.roles} accessibilityRole="radiogroup">
           <RoleCard
-            title="Continue as Patient"
-            subtitle="Check your symptoms, keep your health record and find care nearby"
-            color={colors.patient}
+            icon="person"
+            title="I am a Patient"
+            description="Check symptoms, view records, find clinics"
+            footnoteIcon="mic"
+            footnote="Voice and regional guidance enabled"
+            accent={colors.patient}
+            tileBackground={colors.patientTint}
             onPress={() => router.push("/patient")}
           />
           <RoleCard
-            title="Continue as Doctor"
-            subtitle="Review the triage queue, flag high-risk cases and add notes"
-            color={colors.doctor}
+            icon="stethoscope"
+            title="I am a Doctor"
+            description="View patient queue, triage list & clinical notes"
+            footnoteIcon="clinical_notes"
+            footnote="Clinical telemetry and rapid EHR access"
+            accent={colors.doctor}
+            tileBackground={colors.doctorTint}
             onPress={() => router.push("/doctor")}
           />
         </View>
 
-        <Text style={styles.footer}>
-          Emergency? Call 112. MedLink does not replace emergency services.
-        </Text>
-      </View>
+        <View style={styles.sunlight}>
+          <Icon name="sunny" size={24} color={colors.faint} />
+          <View style={styles.sunlightBody}>
+            <Text style={styles.sunlightTitle}>High Outdoor Sunlight Mode Active</Text>
+            <Text style={styles.sunlightText} numberOfLines={1}>
+              Colors calibrated for glare and low-bandwidth connections
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -68,36 +120,88 @@ export default function RoleSelect() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   container: {
-    flex: 1,
-    padding: spacing.lg,
-    justifyContent: "space-between",
+    paddingHorizontal: spacing.margin,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
   },
-  header: { paddingTop: spacing.xxl, gap: spacing.sm },
-  brand: {
-    fontSize: 44,
-    fontWeight: "800",
-    color: colors.patientDark,
-    letterSpacing: -1,
-  },
-  tagline: { fontSize: 16, color: colors.muted, lineHeight: 23 },
 
-  roles: { gap: spacing.lg },
-  roleCard: {
+  trustPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    alignSelf: "flex-start",
+    backgroundColor: colors.surfaceContainerHigh,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  trustText: { ...type.labelMd, color: colors.text },
+
+  header: { gap: spacing.xs, marginBottom: spacing.lg },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  brand: { ...type.headlineXlMobile, color: colors.text, flex: 1 },
+  tagline: { ...type.bodyXl, color: colors.muted },
+
+  // The mockup's photo is a temporary Stitch asset URL, so the banner keeps the
+  // layout and copy on the tint the gradient resolves to behind the text.
+  banner: {
+    backgroundColor: colors.patientTint,
     borderRadius: radius.lg,
-    padding: spacing.xl,
-    minHeight: 150,
+    padding: spacing.md,
+    gap: spacing.xs,
+    marginBottom: spacing.lg,
+    minHeight: 96,
     justifyContent: "center",
-    gap: spacing.sm,
-    ...shadow,
   },
-  rolePressed: { opacity: 0.88 },
-  roleTitle: { fontSize: 24, fontWeight: "800", color: "#FFFFFF" },
-  roleSubtitle: { fontSize: 15, color: "rgba(255,255,255,0.88)", lineHeight: 21 },
+  bannerLabel: {
+    ...type.labelMd,
+    color: colors.onPrimaryFixed,
+    letterSpacing: 0.8,
+  },
+  bannerText: { ...type.bodyMd, color: colors.onPrimaryFixed },
 
-  footer: {
-    fontSize: 13,
-    color: colors.faint,
-    textAlign: "center",
-    paddingBottom: spacing.sm,
+  roles: { gap: spacing.md },
+  roleCard: {
+    ...elevation.level1,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+    minHeight: 148,
+    justifyContent: "center",
   },
+  pressed: { opacity: 0.88 },
+  roleTop: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  roleTile: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.tile,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  roleTitle: { ...type.headlineMd, flex: 1 },
+  roleArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceContainer,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  roleDescription: { ...type.bodyMd, color: colors.muted },
+  roleFootnote: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  roleFootnoteText: { ...type.labelMd },
+
+  sunlight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.xl,
+  },
+  sunlightBody: { flex: 1, gap: 2 },
+  sunlightTitle: { ...type.labelMd, color: colors.text },
+  sunlightText: { ...type.labelMd, color: colors.muted, fontSize: 14 },
 });

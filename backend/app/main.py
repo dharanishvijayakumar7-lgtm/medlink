@@ -21,6 +21,7 @@ from app.routers import (
     consultations,
     doctors,
     facilities,
+    notes,
     patients,
     referrals,
     triage,
@@ -70,6 +71,7 @@ app.include_router(triage.router)
 app.include_router(facilities.router)
 app.include_router(referrals.router)
 app.include_router(consultations.router)
+app.include_router(notes.router)
 
 
 @app.get("/health", tags=["meta"])

@@ -4,10 +4,10 @@ Part 1 built the patient/doctor loop. Part 2 adds teleconsultation rooms,
 tracked referrals, facility stock, queue status and voice-agent handoff.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -158,6 +158,14 @@ class ConsultationNote(Base):
     # Part 1's lightweight referral note. Tracked referrals live in Referral.
     referred_to_facility_id: Mapped[int | None] = mapped_column(
         ForeignKey("facilities.id"), nullable=True
+    )
+    # When the doctor wants to see this patient again. Set by hand alongside a
+    # high-risk flag - nothing here is auto-computed from the note.
+    follow_up_due_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True, index=True
+    )
+    follow_up_resolved: Mapped[bool] = mapped_column(
+        Boolean, default=False, index=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, index=True

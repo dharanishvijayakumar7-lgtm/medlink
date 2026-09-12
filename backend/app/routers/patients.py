@@ -95,8 +95,11 @@ def add_consultation_note(
         doctor_id=payload.doctor_id,
         note_text=payload.note_text,
         is_high_risk=payload.is_high_risk,
-        # A reason only makes sense alongside the flag.
+        # A reason and a follow-up date only make sense alongside the flag.
         high_risk_reason=payload.high_risk_reason if payload.is_high_risk else None,
+        follow_up_due_date=(
+            payload.follow_up_due_date if payload.is_high_risk else None
+        ),
         referred_to_facility_id=payload.referred_to_facility_id,
     )
     db.add(note)

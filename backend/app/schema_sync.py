@@ -17,12 +17,28 @@ ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("triage_entries", "status", "VARCHAR(20) NOT NULL DEFAULT 'WAITING'"),
     ("triage_entries", "source", "VARCHAR(20) NOT NULL DEFAULT 'app'"),
     ("doctors", "facility_id", "INTEGER REFERENCES facilities(id)"),
+    ("consultation_notes", "follow_up_due_date", "DATE"),
+    (
+        "consultation_notes",
+        "follow_up_resolved",
+        "BOOLEAN NOT NULL DEFAULT FALSE",
+    ),
 ]
 
 # (index name, table, column) - mirrors index=True on the mapped columns.
 ADDED_INDEXES: list[tuple[str, str, str]] = [
     ("ix_triage_entries_status", "triage_entries", "status"),
     ("ix_triage_entries_source", "triage_entries", "source"),
+    (
+        "ix_consultation_notes_follow_up_due_date",
+        "consultation_notes",
+        "follow_up_due_date",
+    ),
+    (
+        "ix_consultation_notes_follow_up_resolved",
+        "consultation_notes",
+        "follow_up_resolved",
+    ),
 ]
 
 

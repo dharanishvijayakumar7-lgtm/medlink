@@ -6,9 +6,17 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
-from app.models import Patient, TriageEntry, TriageSource, TriageStatus
+from app.models import (
+    ConsultationNote,
+    Patient,
+    TriageEntry,
+    TriageSource,
+    TriageStatus,
+    utcnow,
+)
 from app.queries import create_patient, normalise_phone
 from app.schemas import (
+    FollowUpItem,
     QueueItem,
     TriageByPhoneCreate,
     TriageByPhoneResult,
@@ -87,6 +95,54 @@ def high_risk_queue(
     ]
     rows.sort(key=lambda row: row[2], reverse=True)
     return [item for item, _, _ in rows[:limit]]
+
+
+@router.get("/follow-ups-due", response_model=list[FollowUpItem])
+def follow_ups_due(
+    limit: int = Query(50, ge=1, le=200), db: Session = Depends(get_db)
+) -> list[FollowUpItem]:
+    """Patients whose follow-up has come due and has not been closed off.
+
+    Pulled in-app rather than pushed - notifications are a later part. Longest
+    overdue first, so the most neglected patient is at the top.
+    """
+    today = utcnow().date()
+
+    notes = (
+        db.query(ConsultationNote)
+        .options(
+            selectinload(ConsultationNote.patient),
+            selectinload(ConsultationNote.doctor),
+        )
+        .filter(
+            ConsultationNote.follow_up_due_date.isnot(None),
+            ConsultationNote.follow_up_due_date <= today,
+            ConsultationNote.follow_up_resolved.is_(False),
+        )
+        .order_by(ConsultationNote.follow_up_due_date.asc())
+        .limit(limit)
+        .all()
+    )
+
+    return [
+        FollowUpItem(
+            note_id=note.id,
+            unique_code=note.patient.unique_code,
+            name=note.patient.name,
+            age=note.patient.age,
+            gender=note.patient.gender,
+            village=note.patient.village,
+            phone=note.patient.phone,
+            follow_up_due_date=note.follow_up_due_date,
+            days_overdue=(today - note.follow_up_due_date).days,
+            is_high_risk=note.is_high_risk,
+            high_risk_reason=note.high_risk_reason,
+            note_text=note.note_text,
+            doctor_name=note.doctor.name,
+            created_at=note.created_at,
+        )
+        for note in notes
+    ]
 
 
 @router.patch("/{entry_id}/status", response_model=TriageEntryOut)

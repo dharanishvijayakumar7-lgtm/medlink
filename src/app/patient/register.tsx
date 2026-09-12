@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { Icon } from "@/components/icon";
 import {
   Button,
   Card,
@@ -12,9 +13,13 @@ import {
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import { usePatientSession } from "@/lib/patient-session";
-import { colors, spacing } from "@/lib/theme";
+import { colors, radius, spacing, touch, type } from "@/lib/theme";
 
-const GENDERS = ["Female", "Male", "Other"] as const;
+const GENDERS = [
+  { value: "Female", icon: "female" },
+  { value: "Male", icon: "male" },
+  { value: "Other", icon: "person" },
+] as const;
 
 /** Stored as-is for now; translation of the app itself is a later part. */
 const LANGUAGES = [
@@ -89,48 +94,86 @@ export default function PatientRegister() {
 
   return (
     <Screen>
+      <Text style={styles.sectionLabel}>PATIENT DETAILS</Text>
+
       <Card>
-        <Text style={styles.heading}>Tell us who you are</Text>
-        <Text style={styles.body}>
-          MedLink will create a health ID for you. There is no password - your ID
-          is how a doctor finds your record.
-        </Text>
+        <View style={styles.introRow}>
+          <View style={styles.introIcon}>
+            <Icon name="badge" size={28} color={colors.patient} />
+          </View>
+          <View style={styles.introBody}>
+            <Text style={styles.introTitle}>Basic Information</Text>
+            <Text style={styles.introText}>
+              Tap any box to fill in the patient&apos;s information. There is no
+              password - your MedLink ID is how a doctor finds you.
+            </Text>
+          </View>
+        </View>
       </Card>
 
       {error ? <ErrorBanner message={error} /> : null}
 
-      <View style={styles.form}>
+      <Card style={styles.formCard}>
         <TextField
-          label="Full name"
+          label="Full Name"
+          requirement="Required"
           value={name}
           onChangeText={setName}
           placeholder="e.g. Sunita Devi"
           autoCapitalize="words"
         />
         <TextField
-          label="Age"
+          label="Age (in years)"
+          requirement="Required"
           value={age}
           onChangeText={(text) => setAge(text.replace(/\D/g, ""))}
           placeholder="e.g. 34"
           keyboardType="number-pad"
           maxLength={3}
         />
-        <ChoiceChips
-          label="Gender"
-          options={GENDERS}
-          value={gender}
-          onChange={setGender}
-        />
+
+        <View style={styles.field}>
+          <Text style={styles.label}>Gender</Text>
+          <View style={styles.genderRow} accessibilityRole="radiogroup">
+            {GENDERS.map((option) => {
+              const selected = gender === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  onPress={() => setGender(option.value)}
+                  style={[styles.genderTile, selected && styles.genderTileOn]}
+                >
+                  <Icon
+                    name={option.icon}
+                    size={22}
+                    color={selected ? colors.onPatient : colors.muted}
+                  />
+                  <Text
+                    style={[styles.genderText, selected && styles.genderTextOn]}
+                  >
+                    {option.value}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
         <TextField
           label="Phone number"
+          requirement="Required"
           value={phone}
           onChangeText={setPhone}
           placeholder="10-digit mobile number"
           keyboardType="phone-pad"
           maxLength={15}
+          hint="The voice agent matches callers by this number."
         />
         <TextField
           label="Village / area"
+          requirement="Required"
           value={village}
           onChangeText={setVillage}
           placeholder="e.g. Ramnagar, Chandauli"
@@ -142,10 +185,11 @@ export default function PatientRegister() {
           value={language}
           onChange={setLanguage}
         />
-      </View>
+      </Card>
 
       <Button
         title="Create my MedLink ID"
+        icon="badge"
         onPress={handleSubmit}
         loading={submitting}
         tone="patient"
@@ -155,7 +199,36 @@ export default function PatientRegister() {
 }
 
 const styles = StyleSheet.create({
-  heading: { fontSize: 20, fontWeight: "700", color: colors.text },
-  body: { fontSize: 15, color: colors.muted, lineHeight: 21 },
-  form: { gap: spacing.lg },
+  sectionLabel: { ...type.labelMd, color: colors.patient, letterSpacing: 0.8 },
+
+  introRow: { flexDirection: "row", gap: spacing.sm },
+  introIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.pill,
+    backgroundColor: colors.patientTint,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  introBody: { flex: 1, gap: spacing.xs },
+  introTitle: { ...type.headlineMd, color: colors.text },
+  introText: { ...type.bodyMd, color: colors.muted },
+
+  formCard: { gap: spacing.md },
+  field: { gap: spacing.xs },
+  label: { ...type.labelLg, color: colors.text },
+
+  genderRow: { flexDirection: "row", gap: spacing.xs },
+  genderTile: {
+    flex: 1,
+    minHeight: touch.patientAction,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceContainerLow,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+  },
+  genderTileOn: { backgroundColor: colors.patient },
+  genderText: { ...type.labelMd, color: colors.muted },
+  genderTextOn: { color: colors.onPatient },
 });
