@@ -8,7 +8,7 @@ import { QueueCard } from "@/components/queue-card";
 import { EmptyState, ErrorBanner, Loading, Screen } from "@/components/ui";
 import { api, FollowUpItem, QueueItem, TriageStatus } from "@/lib/api";
 import { useDoctorSession } from "@/lib/doctor-session";
-import { colors, radius, spacing, touch, type } from "@/lib/theme";
+import { colors, overlay, radius, spacing, touch, type } from "@/lib/theme";
 
 const ALL = "All";
 const FILTERS = [ALL, "Waiting", "In progress", "Done"] as const;
@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
   metricStrip: {
     flexDirection: "row",
     gap: spacing.sm,
-    backgroundColor: "rgba(0,0,0,0.18)",
+    backgroundColor: overlay.scrim,
     borderRadius: radius.md,
     padding: spacing.sm,
   },
@@ -384,6 +384,6 @@ const styles = StyleSheet.create({
     minWidth: 22,
     alignItems: "center",
   },
-  filterCountOn: { backgroundColor: "rgba(255,255,255,0.25)" },
+  filterCountOn: { backgroundColor: overlay.onColorFill },
   filterCountText: { ...type.labelMd, color: colors.muted },
 });

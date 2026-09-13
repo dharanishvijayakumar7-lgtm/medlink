@@ -26,8 +26,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Icon } from "@/components/icon";
 import { api } from "@/lib/api";
-import { colors, radius, spacing } from "@/lib/theme";
+import { colors, overlay, radius, spacing, touch, type } from "@/lib/theme";
 
 /** Matches @livekit/components-core's TrackReference, which VideoTrack expects. */
 type TrackRef = {
@@ -66,11 +67,13 @@ function ControlButton({
   onPress,
 }: {
   label: string;
+  /** Material Symbols name. */
   icon: string;
   active?: boolean;
   danger?: boolean;
   onPress: () => void;
 }) {
+  const tint = danger ? colors.onWarning : colors.inverseOnSurface;
   return (
     <Pressable
       accessibilityRole="button"
@@ -80,11 +83,11 @@ function ControlButton({
         styles.control,
         danger && styles.controlDanger,
         !danger && active === false && styles.controlOff,
-        pressed && { opacity: 0.8 },
+        pressed && styles.pressed,
       ]}
     >
-      <Text style={styles.controlIcon}>{icon}</Text>
-      <Text style={styles.controlLabel}>{label}</Text>
+      <Icon name={icon} size={26} color={tint} />
+      <Text style={[styles.controlLabel, { color: tint }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -290,7 +293,7 @@ export function LiveCall() {
         <Text style={styles.peerName}>{params.peerName || "Consultation"}</Text>
         <View style={styles.statusRow}>
           {!connected && !error ? (
-            <ActivityIndicator size="small" color="#FFFFFF" />
+            <ActivityIndicator size="small" color={colors.inverseOnSurface} />
           ) : null}
           <Text style={styles.status}>{statusLine}</Text>
         </View>
@@ -299,6 +302,7 @@ export function LiveCall() {
       <View style={styles.stage}>
         {error ? (
           <View style={styles.placeholder}>
+            <Icon name="warning" size={40} color={colors.tertiaryFixed} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : remoteVideo ? (
@@ -332,36 +336,37 @@ export function LiveCall() {
       <View style={styles.controls}>
         <ControlButton
           label={micOn ? "Mute" : "Unmute"}
-          icon={micOn ? "🎙️" : "🔇"}
+          icon={micOn ? "mic" : "mic_off"}
           active={micOn}
           onPress={toggleMic}
         />
         <ControlButton
           label={cameraOn ? "Stop video" : "Start video"}
-          icon={cameraOn ? "📹" : "📴"}
+          icon={cameraOn ? "videocam" : "videocam_off"}
           active={cameraOn}
           onPress={toggleCamera}
         />
-        <ControlButton label="End" icon="📞" danger onPress={() => leave(true)} />
+        <ControlButton label="End" icon="call_end" danger onPress={() => leave(true)} />
       </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#0B1220" },
+  pressed: { opacity: 0.8 },
+  screen: { flex: 1, backgroundColor: colors.ink },
 
   header: { paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: 2 },
-  peerName: { color: "#FFFFFF", fontSize: 20, fontWeight: "700" },
+  peerName: { ...type.headlineMd, color: colors.inverseOnSurface },
   statusRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  status: { color: "rgba(255,255,255,0.72)", fontSize: 14 },
+  status: { ...type.labelMd, color: overlay.onColorText },
 
   stage: {
     flex: 1,
     margin: spacing.lg,
     borderRadius: radius.lg,
     overflow: "hidden",
-    backgroundColor: "#131C2E",
+    backgroundColor: colors.inverseSurface,
   },
   remoteVideo: { flex: 1 },
   placeholder: {
@@ -374,23 +379,16 @@ const styles = StyleSheet.create({
   avatar: {
     width: 104,
     height: 104,
-    borderRadius: 52,
+    borderRadius: radius.pill,
     backgroundColor: colors.patient,
     alignItems: "center",
     justifyContent: "center",
   },
-  avatarText: { color: "#FFFFFF", fontSize: 42, fontWeight: "800" },
-  placeholderText: {
-    color: "rgba(255,255,255,0.65)",
-    fontSize: 15,
-    textAlign: "center",
-  },
-  errorText: {
-    color: "#FF9B9B",
-    fontSize: 15,
-    textAlign: "center",
-    lineHeight: 22,
-  },
+  avatarText: { ...type.headlineXl, color: colors.onPatient },
+  placeholderText: { ...type.bodyLg, color: overlay.onColorText, textAlign: "center" },
+  // The light end of the amber family, so it stays readable on the dark stage.
+  // Errors are never red.
+  errorText: { ...type.bodyLg, color: colors.tertiaryFixed, textAlign: "center" },
 
   localVideo: {
     position: "absolute",
@@ -400,27 +398,30 @@ const styles = StyleSheet.create({
     height: 150,
     borderRadius: radius.md,
     overflow: "hidden",
-    backgroundColor: "#000000",
+    backgroundColor: colors.ink,
   },
 
   controls: {
     flexDirection: "row",
     justifyContent: "center",
-    gap: spacing.lg,
+    gap: spacing.md,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.lg,
   },
+  // Shares the row evenly so three buttons fit a 360dp phone at the 14px floor.
   control: {
+    flex: 1,
+    maxWidth: 120,
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
-    minWidth: 88,
+    gap: spacing.xs,
+    minHeight: touch.patientAction,
     paddingVertical: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: "rgba(255,255,255,0.12)",
+    borderRadius: radius.md,
+    backgroundColor: overlay.onColorFill,
   },
-  controlOff: { backgroundColor: "rgba(255,255,255,0.06)" },
+  controlOff: { backgroundColor: overlay.onColorFaint },
+  // Amber: ending a call is a destructive action, not an emergency.
   controlDanger: { backgroundColor: colors.warning },
-  controlIcon: { fontSize: 22 },
-  controlLabel: { color: "#FFFFFF", fontSize: 12, fontWeight: "600" },
+  controlLabel: { ...type.labelMd, textAlign: "center" },
 });

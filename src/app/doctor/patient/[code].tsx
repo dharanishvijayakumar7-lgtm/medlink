@@ -2,6 +2,7 @@ import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-rou
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { DoctorTimeline } from "@/components/doctor-timeline";
 import { DueDateField } from "@/components/due-date-field";
 import { FacilityPicker } from "@/components/facility-picker";
 import { Icon } from "@/components/icon";
@@ -25,11 +26,13 @@ import {
   ConsultationNote,
   Facility,
   PatientRecord,
+  PatientTimeline,
   Referral,
   ReferralStatus,
   TriageEntry,
 } from "@/lib/api";
 import {
+  ageLong,
   describeDueDate,
   formatDateTime,
   formatIsoDate,
@@ -37,7 +40,7 @@ import {
 } from "@/lib/format";
 import { useDoctorSession } from "@/lib/doctor-session";
 import { isWebRtcAvailable } from "@/lib/livekit";
-import { colors, elevation, radius, spacing, touch, type } from "@/lib/theme";
+import { colors, radius, spacing, touch, type } from "@/lib/theme";
 
 /** Statuses a doctor can move a referral to, beyond the one it already has. */
 const NEXT_STATUSES: ReferralStatus[] = ["CONFIRMED", "COMPLETED", "NO_SHOW"];
@@ -197,6 +200,7 @@ export default function DoctorPatientDetail() {
   const { doctor } = useDoctorSession();
 
   const [record, setRecord] = useState<PatientRecord | null>(null);
+  const [timeline, setTimeline] = useState<PatientTimeline | null>(null);
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -227,7 +231,14 @@ export default function DoctorPatientDetail() {
     if (!code) return;
     setLoading(true);
     try {
-      setRecord(await api.getPatientRecord(code));
+      // The record drives the forms; the timeline merges in uploaded records.
+      // Fetched together so a new note shows up in both after one refresh.
+      const [nextRecord, nextTimeline] = await Promise.all([
+        api.getPatientRecord(code),
+        api.getTimeline(code),
+      ]);
+      setRecord(nextRecord);
+      setTimeline(nextTimeline);
       setError(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load the record.");
@@ -427,11 +438,16 @@ export default function DoctorPatientDetail() {
                 </Text>
                 <View style={styles.agePill}>
                   <Text style={styles.agePillText}>
-                    {record.age}
+                    {record.age !== null ? record.age : ""}
                     {record.gender.charAt(0).toUpperCase()}
                   </Text>
                 </View>
               </View>
+              <Text style={styles.born}>
+                {record.date_of_birth
+                  ? `Born ${formatIsoDate(record.date_of_birth)}`
+                  : "Date of birth not provided"}
+              </Text>
               <View style={styles.idChip}>
                 <Text style={styles.idChipText}>{record.unique_code}</Text>
               </View>
@@ -446,6 +462,8 @@ export default function DoctorPatientDetail() {
           </View>
 
           <View style={styles.metaGrid}>
+            {/* Computed by the server from date of birth, at request time. */}
+            <MetaCell label="Age" value={ageLong(record.age_label)} />
             <MetaCell label="Village" value={record.village} />
             <MetaCell label="Phone" value={record.phone} />
             <MetaCell label="Language" value={record.preferred_language} />
@@ -465,6 +483,9 @@ export default function DoctorPatientDetail() {
           ? "Opens a room on the same LiveKit project as the voice agent. The patient sees a Join prompt on their home screen."
           : "Unavailable in Expo Go - run a development build to make consultations work."}
       </Text>
+
+      {/* History first, so the doctor reads it before writing anything. */}
+      {timeline ? <DoctorTimeline timeline={timeline} /> : null}
 
       <SectionTitle>Add consultation note</SectionTitle>
       <Card style={styles.formCard}>
@@ -636,9 +657,12 @@ const styles = StyleSheet.create({
   },
   idChipText: { ...type.labelMd, color: colors.doctor, letterSpacing: 1 },
 
-  metaGrid: { flexDirection: "row", gap: spacing.xs },
+  born: { ...type.labelMd, color: colors.muted },
+  // Two by two: four cells in one row would truncate on a phone.
+  metaGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
   metaCell: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: "47%",
     backgroundColor: colors.card,
     borderRadius: radius.sm,
     padding: spacing.sm,

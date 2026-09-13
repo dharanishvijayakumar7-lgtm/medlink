@@ -1,12 +1,42 @@
 """Request/response schemas."""
 
 from datetime import date, datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
-from app.models import ReferralStatus, StockItemType, TriageSource, TriageStatus
+from app.ages import age_on, today
+from app.extraction import ExtractedSummary
+from app.models import (
+    DocumentStatus,
+    ReferralStatus,
+    StockItemType,
+    TriageSource,
+    TriageStatus,
+)
 
 ORM = ConfigDict(from_attributes=True)
+
+# Anything earlier is a typing slip, not a patient.
+EARLIEST_BIRTH_DATE = date(1900, 1, 1)
+
+
+def check_date_of_birth(value: date | None) -> date | None:
+    """Shared rule for every place a date of birth enters the system."""
+    if value is None:
+        return value
+    if value > today():
+        raise ValueError("date_of_birth cannot be in the future")
+    if value < EARLIEST_BIRTH_DATE:
+        raise ValueError("date_of_birth must be on or after 1900-01-01")
+    return value
 
 
 # --- Facilities -------------------------------------------------------------
@@ -148,10 +178,15 @@ class TriageByPhoneCreate(BaseModel):
     summary: str | None = None
 
     name: str | None = None
-    age: int | None = Field(default=None, ge=0, le=120)
+    # Only used when this call creates the patient. A raw age is no longer
+    # accepted: it would be a snapshot that goes stale. Unknown fields are
+    # ignored rather than rejected, so an older agent build keeps working.
+    date_of_birth: date | None = None
     gender: str | None = None
     village: str | None = None
     preferred_language: str | None = None
+
+    _check_dob = field_validator("date_of_birth")(check_date_of_birth)
 
     @model_validator(mode="after")
     def require_some_content(self) -> "TriageByPhoneCreate":
@@ -221,7 +256,9 @@ class FollowUpItem(BaseModel):
     note_id: int
     unique_code: str
     name: str
-    age: int
+    # Computed from date of birth at request time; null if it was never given.
+    age: int | None
+    age_label: str | None
     gender: str
     village: str
     phone: str
@@ -287,11 +324,23 @@ class ConsultationOut(BaseModel):
 
 class PatientCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    age: int = Field(ge=0, le=120)
+    # Required for every new registration. Age is derived from it, never sent.
+    date_of_birth: date
     gender: str = Field(min_length=1, max_length=20)
     phone: str = Field(min_length=4, max_length=20)
     village: str = Field(min_length=1, max_length=120)
     preferred_language: str = Field(min_length=1, max_length=40)
+
+    _check_dob = field_validator("date_of_birth")(check_date_of_birth)
+
+
+class PatientUpdate(BaseModel):
+    """What a patient can change about themselves. For now: date of birth,
+    which patients registered before it existed are asked to fill in once."""
+
+    date_of_birth: date
+
+    _check_dob = field_validator("date_of_birth")(check_date_of_birth)
 
 
 class PatientOut(BaseModel):
@@ -300,12 +349,27 @@ class PatientOut(BaseModel):
     id: int
     unique_code: str
     name: str
-    age: int
+    date_of_birth: date | None
     gender: str
     phone: str
     village: str
     preferred_language: str
     created_at: datetime
+
+    # Computed fields, not columns. There is deliberately no plain age field:
+    # with from_attributes, a field named age would read the legacy stored
+    # column. These can only ever come from date_of_birth, at request time.
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def age(self) -> int | None:
+        computed = age_on(self.date_of_birth, today())
+        return computed.years if computed else None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def age_label(self) -> str | None:
+        computed = age_on(self.date_of_birth, today())
+        return computed.label if computed else None
 
 
 class PatientRecord(PatientOut):
@@ -324,7 +388,9 @@ class PatientRecord(PatientOut):
 class QueueItem(BaseModel):
     unique_code: str
     name: str
-    age: int
+    # Computed from date of birth at request time; null if it was never given.
+    age: int | None
+    age_label: str | None
     gender: str
     village: str
     is_high_risk: bool
@@ -336,6 +402,76 @@ class QueueItem(BaseModel):
     latest_triage_source: TriageSource | None
     triage_count: int
     note_count: int
+
+
+# --- Uploaded medical documents -----------------------------------------------
+
+DOCUMENT_DISCLAIMER = (
+    "This summary is for information only. It is not medical advice or a "
+    "diagnosis, and it may contain mistakes. Always talk to a doctor about your "
+    "health before acting on it."
+)
+
+
+class MedicalDocumentOut(BaseModel):
+    model_config = ORM
+
+    id: int
+    hospital_name: str | None
+    visit_date: date | None
+    # True when the patient typed it; false when extraction read it.
+    hospital_name_entered: bool
+    visit_date_entered: bool
+    original_filename: str
+    file_size: int
+    uploaded_at: datetime
+    status: DocumentStatus
+    failure_reason: str | None
+    processed_at: datetime | None
+    extracted_summary: ExtractedSummary | None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def file_url(self) -> str:
+        return f"/documents/{self.id}/file"
+
+    # Travels with every summary, so no client can show one without it.
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def disclaimer(self) -> str:
+        return DOCUMENT_DISCLAIMER
+
+
+# --- Doctor timeline -----------------------------------------------------------
+
+
+class TimelineEntry(BaseModel):
+    """One event in the merged history. Exactly one payload field is set,
+    matching kind, so the client renders detail with types it already knows."""
+
+    kind: Literal["document", "triage", "note", "referral"]
+    date: date
+    # True for a document with no known visit date. It is placed by upload
+    # date, and no age is computed: the upload date is not the visit date.
+    date_is_estimated: bool
+    # The hospital that produced it, or "MedLink" for native events.
+    source: str
+    title: str
+    # Age on this entry's date, from date of birth. Null when the date of
+    # birth is unknown or the date itself is only estimated.
+    age_at_date: int | None
+    age_at_date_label: str | None
+
+    document: MedicalDocumentOut | None = None
+    triage: TriageEntryOut | None = None
+    note: ConsultationNoteOut | None = None
+    referral: ReferralOut | None = None
+
+
+class PatientTimeline(BaseModel):
+    patient: PatientOut
+    # Oldest first: hospital A, then hospital B, then MedLink, in date order.
+    entries: list[TimelineEntry]
 
 
 TriageByPhoneResult.model_rebuild()

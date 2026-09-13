@@ -4,9 +4,10 @@ import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { Icon } from "@/components/icon";
 import { Button, Card, ErrorBanner, Screen } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
-import { colors, elevation, radius, spacing } from "@/lib/theme";
+import { colors, overlay, radius, spacing, touch, type } from "@/lib/theme";
 
 const EMERGENCY_NUMBER = "112";
 
@@ -74,17 +75,22 @@ export default function EmergencySOS() {
 
   return (
     <Screen>
-      <Card style={styles.callCard}>
+      {/* Same pattern as the SOS card on the patient home mockup. */}
+      <View style={styles.callCard}>
+        <View style={styles.callIcon}>
+          <Icon name="emergency" size={32} color={colors.onEmergency} />
+        </View>
         <Text style={styles.callLabel}>India emergency number</Text>
         <Text style={styles.callNumber}>{EMERGENCY_NUMBER}</Text>
         <Pressable
           accessibilityRole="button"
           onPress={() => Linking.openURL(`tel:${EMERGENCY_NUMBER}`)}
-          style={({ pressed }) => [styles.callButton, pressed && { opacity: 0.85 }]}
+          style={({ pressed }) => [styles.callButton, pressed && styles.pressed]}
         >
+          <Icon name="call" size={28} color={colors.emergency} />
           <Text style={styles.callButtonText}>Call {EMERGENCY_NUMBER} now</Text>
         </Pressable>
-      </Card>
+      </View>
 
       <Card>
         <Text style={styles.sectionHeading}>Read this out on the call</Text>
@@ -114,7 +120,8 @@ export default function EmergencySOS() {
               {formatDateTime(fix.at)}
             </Text>
             <Button
-              title={copied ? "✓  Copied" : "Copy location"}
+              title={copied ? "Copied" : "Copy location"}
+              icon={copied ? "check" : "content_copy"}
               onPress={copyLocation}
               tone="emergency"
               variant="outline"
@@ -144,56 +151,55 @@ export default function EmergencySOS() {
 }
 
 const styles = StyleSheet.create({
+  pressed: { opacity: 0.85 },
+
   callCard: {
     backgroundColor: colors.emergency,
-    borderColor: "#9E1F1F",
+    borderRadius: radius.lg,
+    padding: spacing.lg,
     alignItems: "center",
     gap: spacing.sm,
-    paddingVertical: spacing.xl,
   },
-  callLabel: {
-    fontSize: 13,
-    fontWeight: "700",
-    letterSpacing: 1,
-    color: "rgba(255,255,255,0.8)",
-  },
-  callNumber: {
-    fontSize: 68,
-    fontWeight: "900",
-    color: "#FFFFFF",
-    letterSpacing: 2,
-    lineHeight: 76,
-  },
-  callButton: {
-    backgroundColor: "#FFFFFF",
+  callIcon: {
+    width: 56,
+    height: 56,
     borderRadius: radius.pill,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
+    backgroundColor: overlay.onColorFill,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  callLabel: { ...type.labelLg, color: overlay.onColorText },
+  callNumber: { ...type.display, color: colors.onEmergency, letterSpacing: 2 },
+  callButton: {
+    alignSelf: "stretch",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    minHeight: touch.sos,
+    backgroundColor: colors.card,
+    borderRadius: radius.md,
     marginTop: spacing.sm,
   },
-  callButtonText: { color: colors.emergency, fontSize: 18, fontWeight: "800" },
+  callButtonText: { ...type.headlineMd, color: colors.emergency },
 
-  sectionHeading: { fontSize: 17, fontWeight: "700", color: colors.text },
+  sectionHeading: { ...type.headlineMd, color: colors.text },
   coordBlock: {
-    backgroundColor: colors.bg,
+    backgroundColor: colors.surfaceContainer,
     borderRadius: radius.md,
     padding: spacing.md,
     gap: 2,
   },
-  coordLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.6,
-    color: colors.faint,
-  },
-  coordValue: { fontSize: 30, fontWeight: "800", color: colors.text, letterSpacing: 1 },
-  fixMeta: { fontSize: 13, color: colors.muted },
-  locating: { fontSize: 15, color: colors.muted },
+  coordLabel: { ...type.labelMd, color: colors.muted },
+  // Spaced out so the digits are easy to read aloud down a bad line.
+  coordValue: { ...type.headlineXl, color: colors.text, letterSpacing: 1 },
+  fixMeta: { ...type.labelMd, fontFamily: type.bodyLg.fontFamily, color: colors.muted },
+  locating: { ...type.bodyLg, color: colors.muted },
 
   disclaimer: {
-    fontSize: 13,
-    color: colors.faint,
-    lineHeight: 19,
+    ...type.labelMd,
+    fontFamily: type.bodyLg.fontFamily,
+    color: colors.muted,
     textAlign: "center",
     paddingHorizontal: spacing.sm,
   },

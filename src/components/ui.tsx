@@ -47,7 +47,11 @@ const TONES: Record<Tone, { base: string; tint: string; on: string }> = {
     on: colors.onEmergency,
   },
   success: { base: colors.success, tint: colors.successTint, on: colors.onSuccess },
-  neutral: { base: colors.muted, tint: colors.surfaceContainerHigh, on: "#ffffff" },
+  neutral: {
+    base: colors.muted,
+    tint: colors.surfaceContainerHigh,
+    on: colors.inverseOnSurface,
+  },
 };
 
 export function toneColor(tone: Tone): string {
@@ -440,7 +444,7 @@ export function Checkbox({
   onValueChange: (next: boolean) => void;
   tone?: Tone;
 }) {
-  const { base } = TONES[tone];
+  const { base, on } = TONES[tone];
   return (
     <Pressable
       accessibilityRole="checkbox"
@@ -451,7 +455,7 @@ export function Checkbox({
       <View
         style={[styles.checkboxBox, value && { backgroundColor: base, borderColor: base }]}
       >
-        {value ? <Icon name="check" size={18} color="#ffffff" /> : null}
+        {value ? <Icon name="check" size={18} color={on} /> : null}
       </View>
       <Text style={styles.checkboxLabel}>{label}</Text>
     </Pressable>
@@ -633,7 +637,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     alignSelf: "flex-start",
   },
-  badgeText: { ...type.labelMd, fontSize: 13 },
+  badgeText: { ...type.labelMd },
 
   centered: {
     flex: 1,

@@ -4,7 +4,7 @@ Smartphone companion to the MedLink LiveKit voice agent. Voice-based AI healthca
 triage for rural India (SIH 2026).
 
 Expo SDK 57 / React Native 0.86 / expo-router on the front, FastAPI + PostgreSQL
-on the back, LiveKit for real-time.
+on the back, LiveKit for real-time, Gemini for reading uploaded medical records.
 
 > **No authentication yet.** No Firebase, no OTP, no passwords. Patients are
 > identified by a shareable `MED-XXXXXX` code; doctors just type their name. Real
@@ -12,17 +12,22 @@ on the back, LiveKit for real-time.
 
 ---
 
-## ⚠️ Expo Go no longer works
+## ⚠️ Video calls need a development build
 
-Part 2 adds `@livekit/react-native`, which ships native WebRTC. The app now needs a
-**development build**:
+Part 2 adds `@livekit/react-native`, which ships native WebRTC that Expo Go does not
+include. **Expo Go still runs everything except the call screen**: the LiveKit
+import is guarded in `src/lib/livekit.ts`, and the call route explains what is
+missing instead of crashing the app. Real calls need a **development build**:
 
 ```bash
 npx expo prebuild --platform android
 npx expo run:android
 ```
 
-Everything except the call screen works the same once the dev build is installed.
+The date picker (`@react-native-community/datetimepicker`) and document picker
+(`expo-document-picker`) used for date of birth and medical records are both in
+Expo Go. A development build installed before they were added does not have
+them, so **rebuild it** with the commands above.
 
 ### `@livekit/react-native` must stay on 3.x
 
@@ -56,6 +61,10 @@ src/app/
     home.tsx               MED-ID, join-call banner, queue position, actions
     symptom-check.tsx      6-step guided Q&A -> triage entry
     record.tsx             triage history, referral tracker, doctor notes
+    documents/             records from other hospitals (separate from record.tsx)
+      index.tsx              uploaded records, newest first
+      upload.tsx             pick a PDF, optional hospital + visit date
+      [id].tsx               plain-language summary + the original PDF
     facilities.tsx         facility finder with live stock
     sos.tsx                112 + live GPS fix
   doctor/                ── Doctor stack ───────────────────────────────
@@ -65,7 +74,7 @@ src/app/
     search.tsx             open any record by MED-ID
     stock.tsx              toggle medicine / diagnostic availability
     dashboard.tsx          patient load, referral + follow-up completion
-    patient/[code].tsx     record, call, notes, referrals, follow-ups
+    patient/[code].tsx     record, timeline, call, notes, referrals, follow-ups
 ```
 
 Session handling differs by role, on purpose:
@@ -86,8 +95,8 @@ The LiveKit voice agent owns the separate, Alembic-managed `medlink` database
 `DATABASE_URL` pointed at `medlink_app`.
 
 ```
-patients             id, unique_code, name, age, gender, phone, village,
-                     preferred_language, created_at
+patients             id, unique_code, name, date_of_birth, age (legacy, unused),
+                     gender, phone, village, preferred_language, created_at
 doctors              id, name, specialization, facility_id, created_at
 facilities           id, name, type, area_label                (15 seeded)
 facility_stock       id, facility_id, item_name, item_type, available, updated_at
@@ -102,11 +111,18 @@ referrals            id, patient_id, doctor_id, to_facility_id,
                      notes, created_at, updated_at
 consultations        id, patient_id, doctor_id, room_name,
                      status (PENDING|ACTIVE|ENDED), created_at, ended_at
+medical_documents    id, patient_id, hospital_name, visit_date,
+                     hospital_name_entered, visit_date_entered,
+                     original_filename, file_path, file_size,
+                     status (PENDING|PROCESSING|DONE|FAILED),
+                     extracted_summary JSONB, failure_reason,
+                     extraction_model, uploaded_at, processed_at
 ```
 
 Schema changes are applied on startup: `create_all` makes new tables, and
-`app/schema_sync.py` adds columns to tables that already exist. Both are
-idempotent. If the schema ever needs more than additive changes, move to Alembic.
+`app/schema_sync.py` adds columns to tables that already exist and relaxes
+`patients.age` to nullable. Both are idempotent and never drop anything. If the
+schema ever needs more than that, move to Alembic.
 
 ---
 
@@ -119,14 +135,18 @@ cd backend
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements.txt   # Windows
 
-cp .env.example .env        # fill in the DB password and LiveKit keys
+cp .env.example .env        # DB password, LiveKit keys, GEMINI_API_KEY
 createdb -U postgres medlink_app
 
 .venv/Scripts/python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 `--host 0.0.0.0` matters: a phone on your Wi-Fi needs to reach the API.
-`GET /health` reports whether LiveKit is configured. Docs: <http://localhost:8000/docs>
+`GET /health` reports whether LiveKit and Gemini are configured. Docs: <http://localhost:8000/docs>
+
+Uploaded PDFs are written to `backend/uploads/`, which is created on startup and
+gitignored. It holds real patient records, so never commit it or copy it off the
+machine.
 
 ### 2. App
 
@@ -151,8 +171,14 @@ adb reverse tcp:8000 tcp:8000
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/patients` | create patient, returns `unique_code` |
+| `POST` | `/patients` | create patient (date of birth required), returns `unique_code` |
 | `GET` | `/patients/{code}` | full record + referrals + queue position |
+| `PATCH` | `/patients/{code}` | add a date of birth (patients registered before it existed) |
+| `GET` | `/patients/{code}/timeline` | doctor timeline: uploaded records + MedLink history, oldest first |
+| `POST` | `/patients/{code}/documents` | upload a PDF (multipart), returns `202` + `PENDING` at once |
+| `GET` | `/patients/{code}/documents` | a patient's uploaded records, newest first |
+| `GET` | `/documents/{id}` | one record, with its summary once `DONE` |
+| `GET` | `/documents/{id}/file` | the original PDF, shown inline |
 | `GET` | `/patients/{code}/referrals` | patient-facing referral tracker |
 | `POST` | `/patients/{code}/triage` | add a symptom check |
 | `POST` | `/patients/{code}/notes` | doctor note (+ high-risk flag, + follow-up date) |
@@ -172,7 +198,7 @@ adb reverse tcp:8000 tcp:8000
 | `GET` | `/consultations/pending/{code}` | patient polls for a waiting call |
 | `POST` | `/consultations/{id}/end` | close the room |
 | `POST` | `/doctors` | ephemeral doctor session |
-| `GET` | `/health` | liveness + LiveKit status |
+| `GET` | `/health` | liveness + LiveKit and Gemini status |
 
 ---
 
@@ -188,7 +214,8 @@ curl -X POST http://localhost:8000/triage/by-phone \
         "phone": "+91 98765 43210",
         "summary": "Chest pain for 2 days, breathless on walking",
         "answers": [{"question": "How long?", "answer": "2 days"}],
-        "name": "Sunita Devi"
+        "name": "Sunita Devi",
+        "date_of_birth": "1980-03-15"
       }'
 ```
 
@@ -202,6 +229,11 @@ Details that matter:
   `9876543210`, `+919876543210` and `09876543210` are one person.
 - A caller with no record gets one created, so phone-only patients still reach the
   doctor's queue. Missing demographics default to `Unknown` and show up tagged.
+- **Contract change: `age` is no longer accepted — send `date_of_birth`
+  (`YYYY-MM-DD`) if the caller gives one.** An older agent build that still sends
+  `age` keeps working, because unknown fields are ignored rather than rejected.
+  The patient is then created with no date of birth, never a made-up one, and
+  the app asks them for it once.
 - Demographic fields are only used when creating; they never overwrite an
   existing record.
 - Entries are tagged `source: "voice_call"` and appear in the app with a
@@ -247,10 +279,109 @@ come back to them and whether that has happened.
   `null` due date clears it; omitting the key leaves it alone. Clearing a date
   also clears `resolved` — there is nothing left to have resolved. Resolving a
   note with no due date is a 409 rather than a silent no-op.
-- The due-date picker is **preset chips plus typed `YYYY-MM-DD`**, not a native
-  date picker. Presets cover the real cases ("check again in a week"), and it
-  keeps another native module out of the build. Dates are handled as plain ISO
+- The due-date picker is **preset chips plus typed `YYYY-MM-DD`**, not a
+  calendar. Presets cover the real cases ("check again in a week"). Past dates
+  (date of birth, a record's visit date) are the opposite case, a known calendar
+  day, so those use the native date picker. Dates are handled as plain ISO
   strings end to end so no timezone shifts them by a day.
+
+## Medical records from other hospitals
+
+Patients arrive with paper and scanned records from other hospitals. **My
+Documents** lets them upload those as PDFs and read a plain-language summary. It
+is a separate section from **My Record**, which stays MedLink's own history. Only
+the doctor's timeline merges the two.
+
+**Upload never waits for the model.** `POST /patients/{code}/documents` checks
+the file, saves it as `backend/uploads/{MED-ID}/{uuid}.pdf` and returns `202` with
+status `PENDING`. Reading a PDF takes seconds to tens of seconds, so a two-worker
+pool in `app/document_processing.py` does it in the background:
+`PROCESSING`, then `DONE` or `FAILED`. The app polls while anything is in flight
+and shows "Analyzing your document...". Documents a restart left unfinished are
+queued again on startup.
+
+**Upload checks:**
+
+- PDF only, judged by the file's `%PDF-` header rather than the claimed type (`415`).
+- 15 MB at most (`413`). Gemini takes PDFs inline up to about 20 MB.
+- An optional `visit_date` must be `YYYY-MM-DD` and not in the future (`422`).
+- The saved path never uses the client's filename.
+
+**What gets extracted** (`app/extraction.py`): symptoms, medicines, test results
+outside the normal range explained in plain words (low and high), key medical
+terms with a one-line explanation each, a plain summary, and a "what this might
+mean for you" note. The prompt pins down the judgement calls:
+
+- Only what the document says. No diagnosis, and never advice to start, stop or
+  change a medicine.
+- The PDF is data, not instructions, so text inside it cannot re-prompt the model.
+- A lab value counts as low or high only when the report flags it or it falls
+  outside the printed range.
+- Dates are day-first (`03/02/2026` is 3 February). On a discharge summary the
+  visit date is the **admission** date.
+- Scanned pages and Hindi text are read. The summary is always in English.
+
+A hospital name or visit date the patient typed is never overwritten; extraction
+only fills gaps. An extracted visit date in the future is treated as a misread and
+dropped. A PDF that is not a medical record ends `FAILED`, with a reason the
+patient can act on. Every summary carries the API's disclaimer (information only,
+not medical advice or a diagnosis, may contain mistakes), and the app shows it
+above the summary.
+
+**Model: `gemini-3.1-flash-lite`, falling back to `gemini-3.5-flash-lite`** on
+`429`/`500`/`503`/`504`. Both were tested against `gemini-3.8-flash` on a typed
+discharge summary and a noisy image-only scan with a day-first date and a Hindi
+line:
+
+| model | checks passed | avg per document |
+|---|---|---|
+| `gemini-3.1-flash-lite` | 17/18 | 3.7 s |
+| `gemini-3.5-flash-lite` | 17/18 | 12.3 s |
+| `gemini-3.8-flash` | 10/11, then `503` "high demand" on the scan | 6.6 s |
+
+Every model missed the same check: it read the discharge date as the visit date.
+The schema now specifies the admission date. The Flash-Lite models sit in the more
+generous free tier, and the fallback is a different model, so it draws on its own
+quota. Override with `GEMINI_MODEL` / `GEMINI_FALLBACK_MODEL`.
+
+## Date of birth instead of age
+
+A typed age goes stale, and it cannot say how old someone was at a visit two years
+ago. Patients now have a `date_of_birth`, and **age is computed on the server on
+every read, never stored.**
+
+- **New patients must give one.** `POST /patients` rejects a missing date of
+  birth, a future one, or one before 1900.
+- **Existing patients are asked once and never blocked.** Home shows a card to add
+  it. "Skip for now" is remembered on the device, and an "Add your date of birth"
+  link stays available afterwards. `PATCH /patients/{code}` saves it.
+- **`patients.age` stays, nullable and unused.** Nothing is back-filled from it,
+  because a guess like "born 1 January 1968" would look exact and be wrong. The
+  old stored number is never returned either: until a date of birth is given,
+  `age` and `age_label` are `null`. Patient Detail shows "Not provided" and
+  compact screens show "Age —".
+- `age_label` reads naturally for small children: `3 yrs`, `1 yr 4 mo`, `7 mo`,
+  `12 days`, `Newborn`.
+
+## The doctor timeline
+
+`GET /patients/{code}/timeline` merges uploaded records with MedLink's triage
+entries, notes and referrals into one list, **oldest first**. Patient Detail shows
+it, so the doctor sees the whole history in one scroll.
+
+- Each entry has a date, a source (the hospital, or `MedLink`), a one-line
+  summary, expandable detail, and **the patient's age on that date**, computed from
+  date of birth.
+- An age written inside a record appears only in its expanded detail, labelled
+  as written in the record. It is never the headline.
+- A record with no known visit date sits at its upload date, marked "(upload
+  date)", and shows **no** age. An age worked out from the upload date would
+  look precise and be wrong.
+- On the same day, an outside visit with a known date sorts before MedLink
+  events.
+- MedLink timestamps are stored in UTC and grouped by the server's local calendar
+  day. Run the API on a machine set to IST: on a UTC server, events between
+  midnight and 5:30 am IST land on the previous day.
 
 ## Design decisions worth knowing
 
@@ -278,3 +409,12 @@ come back to them and whether that has happened.
 Firebase/OTP/any real auth, doctor credential verification, offline sync, push
 and SMS notifications, ABDM/FHIR, multilingual UI (preferred language is captured
 but nothing is translated), facility quality-metrics dashboard.
+
+For medical records specifically: deleting an uploaded record, an "approximate"
+date of birth for patients who only know their age, and object storage in place
+of the local `uploads/` folder.
+
+> **Privacy gap until auth lands.** Record ids are sequential and nothing is
+> authenticated, so anyone who can reach the API can walk `/documents/1`,
+> `/documents/2`, … and read other patients' records and PDFs. Acceptable for a
+> local demo only. Part 3 auth has to close this before real records are uploaded.

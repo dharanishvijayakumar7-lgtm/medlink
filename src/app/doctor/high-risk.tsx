@@ -6,7 +6,7 @@ import { Icon } from "@/components/icon";
 import { QueueCard } from "@/components/queue-card";
 import { EmptyState, ErrorBanner, Loading, Screen } from "@/components/ui";
 import { api, QueueItem } from "@/lib/api";
-import { colors, radius, spacing, touch, type } from "@/lib/theme";
+import { colors, overlay, radius, spacing, touch, type } from "@/lib/theme";
 
 function Telemetry({ label, value }: { label: string; value: string }) {
   return (
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: radius.md,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: overlay.onColorFill,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
   telemetry: {
     flex: 1,
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.18)",
+    backgroundColor: overlay.scrim,
     borderRadius: radius.md,
     paddingVertical: spacing.sm,
     gap: 2,

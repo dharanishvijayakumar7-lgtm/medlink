@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   },
   assuranceBody: { flex: 1, minWidth: 0 },
   assuranceTitle: { ...type.labelMd, color: colors.text },
-  assuranceCaption: { ...type.labelMd, fontSize: 14, color: colors.muted },
+  assuranceCaption: { ...type.labelMd, color: colors.muted },
 
   formCard: { gap: spacing.md },
 });

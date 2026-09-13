@@ -89,3 +89,25 @@ export function describeDueDate(value: string): string {
   const overdue = -days;
   return `${overdue} day${overdue === 1 ? "" : "s"} overdue`;
 }
+
+// --- Age (always computed by the server) ------------------------------------
+//
+// The client never works out an age: the server computes it from date of birth
+// at request time and sends a label. These only choose what to show when a
+// patient registered before date of birth was collected has none.
+
+/** For compact rows, e.g. "33 yrs" or "Age -". */
+export function ageShort(label: string | null | undefined): string {
+  return label ?? "Age —";
+}
+
+/** For demographics, e.g. "33 yrs" or "Not provided". */
+export function ageLong(label: string | null | undefined): string {
+  return label ?? "Not provided";
+}
+
+/** "248 KB", "1.4 MB". */
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}

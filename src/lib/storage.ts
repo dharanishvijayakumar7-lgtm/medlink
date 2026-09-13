@@ -28,3 +28,22 @@ export async function savePatientSession(session: PatientSession): Promise<void>
 export async function clearPatientSession(): Promise<void> {
   await AsyncStorage.removeItem(KEY);
 }
+
+// --- One-time date of birth prompt -------------------------------------------
+//
+// Patients registered before date of birth existed are asked for it once. If
+// they skip, the prompt never nags again; they can still add it from Home.
+
+const DOB_PROMPT_KEY = "medlink.dobPromptDismissed.";
+
+export async function isDobPromptDismissed(uniqueCode: string): Promise<boolean> {
+  try {
+    return (await AsyncStorage.getItem(DOB_PROMPT_KEY + uniqueCode)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export async function dismissDobPrompt(uniqueCode: string): Promise<void> {
+  await AsyncStorage.setItem(DOB_PROMPT_KEY + uniqueCode, "1");
+}

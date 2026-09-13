@@ -203,5 +203,5 @@ const styles = StyleSheet.create({
   },
   sunlightBody: { flex: 1, gap: 2 },
   sunlightTitle: { ...type.labelMd, color: colors.text },
-  sunlightText: { ...type.labelMd, color: colors.muted, fontSize: 14 },
+  sunlightText: { ...type.labelMd, color: colors.muted },
 });

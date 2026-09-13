@@ -1,4 +1,4 @@
-"""Patient identity, record retrieval, triage entries and doctor notes."""
+"""Patient identity, record retrieval, timeline, triage entries and doctor notes."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -6,12 +6,15 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import ConsultationNote, Doctor, Facility, Patient, TriageEntry
 from app.queries import create_patient as allocate_patient, load_patient, queue_position
+from app.timeline import build_timeline
 from app.schemas import (
     ConsultationNoteCreate,
     ConsultationNoteOut,
     PatientCreate,
     PatientOut,
     PatientRecord,
+    PatientTimeline,
+    PatientUpdate,
     ReferralOut,
     TriageEntryCreate,
     TriageEntryOut,
@@ -33,6 +36,30 @@ def get_patient(unique_code: str, db: Session = Depends(get_db)) -> PatientRecor
     record = PatientRecord.model_validate(patient)
     record.queue_position = queue_position(db, patient.id)
     return record
+
+
+@router.patch("/{unique_code}", response_model=PatientOut)
+def update_patient(
+    unique_code: str, payload: PatientUpdate, db: Session = Depends(get_db)
+) -> Patient:
+    """Fill in details a patient did not give at registration.
+
+    Exists for the one-time prompt shown to patients registered before date of
+    birth was collected. Only date of birth is editable for now.
+    """
+    patient = load_patient(db, unique_code)
+    patient.date_of_birth = payload.date_of_birth
+    db.commit()
+    db.refresh(patient)
+    return patient
+
+
+@router.get("/{unique_code}/timeline", response_model=PatientTimeline)
+def get_timeline(unique_code: str, db: Session = Depends(get_db)) -> PatientTimeline:
+    """Uploaded records and MedLink history merged, oldest first, each with
+    the patient's computed age on that date."""
+    patient = load_patient(db, unique_code, with_history=True, with_documents=True)
+    return build_timeline(patient)
 
 
 @router.get("/{unique_code}/referrals", response_model=list[ReferralOut])

@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { DateOfBirthField } from "@/components/past-date-field";
 import { Icon } from "@/components/icon";
 import {
   Button,
@@ -40,7 +41,8 @@ export default function PatientRegister() {
   const { identify } = usePatientSession();
 
   const [name, setName] = useState("");
-  const [age, setAge] = useState("");
+  // ISO YYYY-MM-DD. Replaces the old typed age: the server derives age from it.
+  const [dateOfBirth, setDateOfBirth] = useState<string | null>(null);
   const [gender, setGender] = useState<string | null>(null);
   const [phone, setPhone] = useState("");
   const [village, setVillage] = useState("");
@@ -51,10 +53,7 @@ export default function PatientRegister() {
 
   function validate(): string | null {
     if (!name.trim()) return "Please enter the patient's name.";
-    const parsedAge = Number(age);
-    if (!age.trim() || !Number.isInteger(parsedAge) || parsedAge < 0 || parsedAge > 120) {
-      return "Please enter an age between 0 and 120.";
-    }
+    if (!dateOfBirth) return "Please choose the patient's date of birth.";
     if (!gender) return "Please select a gender.";
     if (phone.replace(/\D/g, "").length < 10) {
       return "Please enter a 10-digit phone number.";
@@ -77,7 +76,7 @@ export default function PatientRegister() {
       const digits = phone.replace(/\D/g, "");
       const patient = await api.createPatient({
         name: name.trim(),
-        age: Number(age),
+        date_of_birth: dateOfBirth!,
         gender: gender!,
         phone: digits,
         village: village.trim(),
@@ -122,14 +121,10 @@ export default function PatientRegister() {
           placeholder="e.g. Sunita Devi"
           autoCapitalize="words"
         />
-        <TextField
-          label="Age (in years)"
+        <DateOfBirthField
+          value={dateOfBirth}
+          onChange={setDateOfBirth}
           requirement="Required"
-          value={age}
-          onChangeText={(text) => setAge(text.replace(/\D/g, ""))}
-          placeholder="e.g. 34"
-          keyboardType="number-pad"
-          maxLength={3}
         />
 
         <View style={styles.field}>

@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/icon";
 import { Badge, SoftBadge, Tone } from "@/components/ui";
 import { QueueItem, TriageStatus } from "@/lib/api";
-import { timeAgo } from "@/lib/format";
+import { ageShort, timeAgo } from "@/lib/format";
 import { colors, elevation, radius, spacing, touch, type } from "@/lib/theme";
 
 export const TRIAGE_STATUS_META: Record<
@@ -81,7 +81,7 @@ export function QueueCard({
           </View>
 
           <Text style={styles.meta}>
-            {item.age} yrs · {item.gender} · {item.village}
+            {ageShort(item.age_label)} · {item.gender} · {item.village}
           </Text>
 
           {item.latest_triage_summary ? (

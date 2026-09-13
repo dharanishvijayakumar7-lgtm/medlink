@@ -23,9 +23,15 @@ export const API_BASE_URL = resolveBaseUrl();
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
+    // JSON bodies are sent as strings. A FormData upload must not get this
+    // header: fetch has to set multipart/form-data itself, with its boundary.
+    const isJson = typeof init?.body === "string";
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
-      headers: { "Content-Type": "application/json", ...init?.headers },
+      headers: {
+        ...(isJson ? { "Content-Type": "application/json" } : {}),
+        ...init?.headers,
+      },
     });
   } catch {
     throw new Error(
@@ -82,7 +88,12 @@ export type Patient = {
   id: number;
   unique_code: string;
   name: string;
-  age: number;
+  /** ISO date. Null for patients registered before it was collected. */
+  date_of_birth: string | null;
+  /** Computed by the server from date_of_birth at request time; never stored. */
+  age: number | null;
+  /** "34 yrs", "1 yr 3 mo", "7 mo" - null when there is no date of birth. */
+  age_label: string | null;
   gender: string;
   phone: string;
   village: string;
@@ -161,7 +172,8 @@ export type PatientRecord = Patient & {
 export type QueueItem = {
   unique_code: string;
   name: string;
-  age: number;
+  age: number | null;
+  age_label: string | null;
   gender: string;
   village: string;
   is_high_risk: boolean;
@@ -179,7 +191,8 @@ export type FollowUpItem = {
   note_id: number;
   unique_code: string;
   name: string;
-  age: number;
+  age: number | null;
+  age_label: string | null;
   gender: string;
   village: string;
   phone: string;
@@ -219,6 +232,78 @@ export type FacilityDashboard = {
   follow_up_completion_rate: RateStat;
 };
 
+export type DocumentStatus = "PENDING" | "PROCESSING" | "DONE" | "FAILED";
+
+export type Medication = { name: string; details: string | null };
+
+export type LabFinding = {
+  test: string;
+  value: string | null;
+  plain_explanation: string;
+};
+
+export type KeyTerm = { term: string; explanation: string };
+
+/** What Gemini read from an uploaded record, in plain language. */
+export type ExtractedSummary = {
+  is_medical_document: boolean;
+  hospital_name: string | null;
+  visit_date: string | null;
+  /** Raw text from the document - context only, never the displayed age. */
+  patient_age_mentioned: string | null;
+  symptoms: string[];
+  medications: Medication[];
+  deficiencies: LabFinding[];
+  excesses: LabFinding[];
+  key_terms: KeyTerm[];
+  plain_summary: string;
+  suggested_next_steps: string;
+};
+
+export type MedicalDocument = {
+  id: number;
+  hospital_name: string | null;
+  visit_date: string | null;
+  hospital_name_entered: boolean;
+  visit_date_entered: boolean;
+  original_filename: string;
+  file_size: number;
+  uploaded_at: string;
+  status: DocumentStatus;
+  failure_reason: string | null;
+  processed_at: string | null;
+  extracted_summary: ExtractedSummary | null;
+  /** Relative path; resolve with documentFileUrl(). */
+  file_url: string;
+  /** Sent with every document so no screen can show a summary without it. */
+  disclaimer: string;
+};
+
+export type TimelineKind = "document" | "triage" | "note" | "referral";
+
+export type TimelineEntry = {
+  kind: TimelineKind;
+  date: string;
+  /** A document with no known visit date, placed by its upload date. */
+  date_is_estimated: boolean;
+  /** Hospital name, or "MedLink" for native events. */
+  source: string;
+  title: string;
+  /** Computed from date of birth for this entry's date. */
+  age_at_date: number | null;
+  age_at_date_label: string | null;
+  document: MedicalDocument | null;
+  triage: TriageEntry | null;
+  note: ConsultationNote | null;
+  referral: Referral | null;
+};
+
+export type PatientTimeline = {
+  patient: Patient;
+  /** Oldest first. */
+  entries: TimelineEntry[];
+};
+
 export type Consultation = {
   id: number;
   room_name: string;
@@ -233,7 +318,18 @@ export type Consultation = {
 
 // --- Endpoints ---------------------------------------------------------------
 
-export type PatientDraft = Omit<Patient, "id" | "unique_code" | "created_at">;
+/** Registration payload. Age is never sent - the server derives it. */
+export type PatientDraft = {
+  name: string;
+  date_of_birth: string;
+  gender: string;
+  phone: string;
+  village: string;
+  preferred_language: string;
+};
+
+/** A PDF chosen with expo-document-picker. */
+export type PickedPdf = { uri: string; name: string; mimeType?: string | null };
 
 const code = (value: string) => encodeURIComponent(value);
 
@@ -243,6 +339,47 @@ export const api = {
 
   getPatientRecord: (unique: string) =>
     request<PatientRecord>(`/patients/${code(unique)}`),
+
+  /** Fill in a date of birth for a patient registered before it existed. */
+  updatePatient: (unique: string, changes: { date_of_birth: string }) =>
+    patch_<Patient>(`/patients/${code(unique)}`, changes),
+
+  /** Merged uploaded records + MedLink history, oldest first. */
+  getTimeline: (unique: string) =>
+    request<PatientTimeline>(`/patients/${code(unique)}/timeline`),
+
+  // Uploaded medical records
+  /**
+   * Returns as soon as the file is stored, with status PENDING. Extraction
+   * runs on the server afterwards; poll getDocument until DONE or FAILED.
+   */
+  uploadDocument: (
+    unique: string,
+    file: PickedPdf,
+    extras: { hospital_name?: string; visit_date?: string },
+  ) => {
+    const form = new FormData();
+    // React Native's FormData takes a { uri, name, type } descriptor for files.
+    form.append("file", {
+      uri: file.uri,
+      name: file.name || "document.pdf",
+      type: file.mimeType || "application/pdf",
+    } as unknown as Blob);
+    if (extras.hospital_name?.trim()) {
+      form.append("hospital_name", extras.hospital_name.trim());
+    }
+    if (extras.visit_date?.trim()) form.append("visit_date", extras.visit_date.trim());
+    return request<MedicalDocument>(`/patients/${code(unique)}/documents`, {
+      method: "POST",
+      body: form,
+    });
+  },
+
+  listDocuments: (unique: string) =>
+    request<MedicalDocument[]>(`/patients/${code(unique)}/documents`),
+
+  getDocument: (documentId: number) =>
+    request<MedicalDocument>(`/documents/${documentId}`),
 
   getPatientReferrals: (unique: string) =>
     request<Referral[]>(`/patients/${code(unique)}/referrals`),
@@ -328,3 +465,13 @@ export const api = {
   endConsultation: (consultationId: number) =>
     post<Consultation>(`/consultations/${consultationId}/end`),
 };
+
+/** Absolute URL for a document's original PDF, for opening on the device. */
+export function documentFileUrl(document: Pick<MedicalDocument, "file_url">): string {
+  return `${API_BASE_URL}${document.file_url}`;
+}
+
+/** Still being read on the server - the screen should keep polling. */
+export function isDocumentInFlight(document: Pick<MedicalDocument, "status">): boolean {
+  return document.status === "PENDING" || document.status === "PROCESSING";
+}

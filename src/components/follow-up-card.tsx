@@ -2,8 +2,8 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Icon } from "@/components/icon";
 import { FollowUpItem } from "@/lib/api";
-import { formatIsoDate } from "@/lib/format";
-import { colors, elevation, radius, spacing, type } from "@/lib/theme";
+import { ageShort, formatIsoDate } from "@/lib/format";
+import { colors, elevation, overlay, radius, spacing, type } from "@/lib/theme";
 
 /**
  * One patient waiting on a check-in.
@@ -55,7 +55,7 @@ export function FollowUpCard({
               {item.name}
             </Text>
             <Text style={styles.meta}>
-              {item.unique_code} · {item.age} yrs · {item.village}
+              {item.unique_code} · {ageShort(item.age_label)} · {item.village}
             </Text>
           </View>
           <Icon name="chevron_right" size={24} color={colors.faint} />
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   bannerDueToday: { backgroundColor: colors.tertiaryContainer },
   bannerText: { ...type.labelLg, color: colors.onWarning, flex: 1 },
   bannerTag: {
-    backgroundColor: "rgba(255,255,255,0.22)",
+    backgroundColor: overlay.onColorFill,
     borderRadius: radius.sm,
     paddingVertical: 2,
     paddingHorizontal: spacing.xs,

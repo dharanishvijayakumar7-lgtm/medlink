@@ -184,7 +184,8 @@ export const type: Record<
   | "bodyLg"
   | "bodyMd"
   | "labelLg"
-  | "labelMd",
+  | "labelMd"
+  | "display",
   TextStyle
 > = {
   headlineXl: { fontFamily: fonts.bold, fontSize: 32, lineHeight: 40 },
@@ -197,7 +198,32 @@ export const type: Record<
   labelLg: { fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
   /** The absolute floor. Nothing in the system may be smaller. */
   labelMd: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20 },
+  /**
+   * Not in DESIGN.md's scale - added for one job: the emergency number on the
+   * SOS screen, which has to be readable at arm's length while dialling.
+   * Do not use it for anything else.
+   */
+  display: { fontFamily: fonts.bold, fontSize: 64, lineHeight: 72 },
 };
+
+// --- Overlays -----------------------------------------------------------------
+//
+// White or black at a fixed alpha, for things sitting on a coloured or dark
+// surface (the teal symptom-check card, the navy triage hero, the call screen).
+
+export const overlay = {
+  /** Tinted fill for a tile, pill or button on a coloured card. */
+  onColorFill: "rgba(255,255,255,0.2)",
+  /** The quieter, switched-off state of such a fill. */
+  onColorFaint: "rgba(255,255,255,0.08)",
+  /**
+   * Secondary text on a coloured card. Deliberately high: DESIGN.md avoids
+   * low-opacity text, which washes out in direct sunlight.
+   */
+  onColorText: "rgba(255,255,255,0.9)",
+  /** A darkening strip inside a navy hero. */
+  scrim: "rgba(0,0,0,0.18)",
+} as const;
 
 // --- Spacing (8pt grid) -----------------------------------------------------
 

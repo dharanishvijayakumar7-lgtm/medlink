@@ -5,6 +5,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, selectinload
 
+from app.ages import age_on, today
 from app.database import get_db
 from app.models import (
     ConsultationNote,
@@ -27,6 +28,16 @@ from app.schemas import (
 router = APIRouter(prefix="/triage", tags=["triage"])
 
 
+def _years(date_of_birth):
+    computed = age_on(date_of_birth, today())
+    return computed.years if computed else None
+
+
+def _label(date_of_birth):
+    computed = age_on(date_of_birth, today())
+    return computed.label if computed else None
+
+
 def _build_item(patient: Patient) -> tuple[QueueItem, datetime, datetime]:
     """Return the queue row plus its triage and overall activity sort keys.
 
@@ -39,7 +50,9 @@ def _build_item(patient: Patient) -> tuple[QueueItem, datetime, datetime]:
     item = QueueItem(
         unique_code=patient.unique_code,
         name=patient.name,
-        age=patient.age,
+        # Computed from date of birth now; the legacy stored age is never read.
+        age=_years(patient.date_of_birth),
+        age_label=_label(patient.date_of_birth),
         gender=patient.gender,
         village=patient.village,
         is_high_risk=bool(high_risk_notes),
@@ -106,7 +119,8 @@ def follow_ups_due(
     Pulled in-app rather than pushed - notifications are a later part. Longest
     overdue first, so the most neglected patient is at the top.
     """
-    today = utcnow().date()
+    # Not named `today`: that would shadow app.ages.today inside this function.
+    as_of = utcnow().date()
 
     notes = (
         db.query(ConsultationNote)
@@ -116,7 +130,7 @@ def follow_ups_due(
         )
         .filter(
             ConsultationNote.follow_up_due_date.isnot(None),
-            ConsultationNote.follow_up_due_date <= today,
+            ConsultationNote.follow_up_due_date <= as_of,
             ConsultationNote.follow_up_resolved.is_(False),
         )
         .order_by(ConsultationNote.follow_up_due_date.asc())
@@ -129,12 +143,13 @@ def follow_ups_due(
             note_id=note.id,
             unique_code=note.patient.unique_code,
             name=note.patient.name,
-            age=note.patient.age,
+            age=_years(note.patient.date_of_birth),
+            age_label=_label(note.patient.date_of_birth),
             gender=note.patient.gender,
             village=note.patient.village,
             phone=note.patient.phone,
             follow_up_due_date=note.follow_up_due_date,
-            days_overdue=(today - note.follow_up_due_date).days,
+            days_overdue=(as_of - note.follow_up_due_date).days,
             is_high_risk=note.is_high_risk,
             high_risk_reason=note.high_risk_reason,
             note_text=note.note_text,
@@ -201,7 +216,8 @@ def triage_by_phone(
         patient = create_patient(
             db,
             name=payload.name or f"Caller {phone[-4:]}",
-            age=payload.age if payload.age is not None else 0,
+            # Left null when the caller did not give one - never fabricated.
+            date_of_birth=payload.date_of_birth,
             gender=payload.gender or "Unknown",
             phone=phone,
             village=payload.village or "Unknown",

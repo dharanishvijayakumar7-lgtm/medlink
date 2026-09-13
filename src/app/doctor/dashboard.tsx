@@ -15,7 +15,7 @@ import {
 import { api, Facility, FacilityDashboard, RateStat } from "@/lib/api";
 import { formatIsoDate } from "@/lib/format";
 import { useDoctorSession } from "@/lib/doctor-session";
-import { colors, radius, spacing } from "@/lib/theme";
+import { colors, radius, spacing, type } from "@/lib/theme";
 
 const WINDOWS = ["7 days", "30 days", "90 days", "1 year"] as const;
 const WINDOW_DAYS: Record<string, number> = {
@@ -215,26 +215,27 @@ export default function FacilityDashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  range: { fontSize: 13, color: colors.muted, fontWeight: "600" },
+  range: { ...type.labelMd, color: colors.muted },
 
-  statTitle: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1,
-    color: colors.faint,
-  },
-  statValue: { fontSize: 48, fontWeight: "800", letterSpacing: -1 },
-  statCaption: { fontSize: 14, color: colors.muted, lineHeight: 20 },
+  // Same treatment as the "TRIAGE DESK" label and waiting count on the queue.
+  statTitle: { ...type.labelMd, color: colors.muted, letterSpacing: 1 },
+  statValue: { ...type.headlineXl },
+  statCaption: { ...type.bodyLg, color: colors.muted },
   statFootnote: {
-    fontSize: 12,
-    color: colors.faint,
-    lineHeight: 17,
-    backgroundColor: colors.bg,
+    ...type.labelMd,
+    fontFamily: type.bodyLg.fontFamily,
+    color: colors.muted,
+    backgroundColor: colors.surfaceContainer,
     borderRadius: radius.md,
     padding: spacing.md,
     marginTop: spacing.xs,
   },
 
   aside: { paddingVertical: spacing.sm },
-  asideText: { fontSize: 13, color: colors.faint, textAlign: "center" },
+  asideText: {
+    ...type.labelMd,
+    fontFamily: type.bodyLg.fontFamily,
+    color: colors.muted,
+    textAlign: "center",
+  },
 });

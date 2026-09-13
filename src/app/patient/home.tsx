@@ -3,11 +3,14 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { DateOfBirthPrompt } from "@/components/date-of-birth-prompt";
 import { Icon } from "@/components/icon";
 import { Badge, ErrorBanner, Loading, Screen } from "@/components/ui";
 import { api, Consultation, PatientRecord } from "@/lib/api";
+import { ageShort } from "@/lib/format";
 import { usePatientSession } from "@/lib/patient-session";
-import { colors, elevation, radius, spacing, touch, type } from "@/lib/theme";
+import { dismissDobPrompt, isDobPromptDismissed } from "@/lib/storage";
+import { colors, elevation, overlay, radius, spacing, touch, type } from "@/lib/theme";
 
 /** How often to check for a doctor starting a call. Push comes in a later part. */
 const POLL_MS = 10_000;
@@ -59,6 +62,8 @@ export default function PatientHome() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  // null until read from storage, so the prompt never flashes up then vanishes.
+  const [dobPromptDismissed, setDobPromptDismissed] = useState<boolean | null>(null);
 
   const code = session?.unique_code ?? "";
 
@@ -89,15 +94,21 @@ export default function PatientHome() {
     useCallback(() => {
       load();
       checkForCall();
+      if (code) isDobPromptDismissed(code).then(setDobPromptDismissed);
       const timer = setInterval(checkForCall, POLL_MS);
       return () => clearInterval(timer);
-    }, [load, checkForCall]),
+    }, [load, checkForCall, code]),
   );
 
   async function copyCode() {
     await Clipboard.setStringAsync(code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function skipDobPrompt() {
+    setDobPromptDismissed(true);
+    await dismissDobPrompt(code);
   }
 
   async function startOver() {
@@ -126,6 +137,10 @@ export default function PatientHome() {
 
   const flagged = record?.notes.find((note) => note.is_high_risk) ?? null;
   const position = record?.queue_position ?? null;
+  // Patients registered before date of birth existed are asked once. Skipping
+  // hides the card for good; it can still be reopened from the ID card.
+  const missingDob = record !== null && record.date_of_birth === null;
+  const showDobPrompt = missingDob && dobPromptDismissed === false;
 
   return (
     <Screen refreshing={loading} onRefresh={load}>
@@ -175,7 +190,7 @@ export default function PatientHome() {
             </Text>
             {record ? (
               <Text style={styles.idMeta} numberOfLines={1}>
-                {record.name} · {record.age} Yrs · {record.gender}
+                {record.name} · {ageShort(record.age_label)} · {record.gender}
               </Text>
             ) : null}
           </View>
@@ -194,6 +209,26 @@ export default function PatientHome() {
           </Pressable>
         </View>
       </View>
+
+      {missingDob && dobPromptDismissed ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setDobPromptDismissed(false)}
+          style={styles.addDob}
+          hitSlop={12}
+        >
+          <Icon name="cake" size={18} color={colors.patient} />
+          <Text style={styles.addDobText}>Add your date of birth</Text>
+        </Pressable>
+      ) : null}
+
+      {showDobPrompt && record ? (
+        <DateOfBirthPrompt
+          uniqueCode={record.unique_code}
+          onSaved={() => load()}
+          onSkip={skipDobPrompt}
+        />
+      ) : null}
 
       {/* Primary action */}
       <Pressable
@@ -271,6 +306,24 @@ export default function PatientHome() {
         />
       </View>
 
+      {/* Outside records - its own row, kept apart from My Record on purpose. */}
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push("/patient/documents")}
+        style={({ pressed }) => [styles.wideTile, pressed && styles.pressed]}
+      >
+        <View style={[styles.tileIcon, { backgroundColor: colors.patientTint }]}>
+          <Icon name="description" size={28} color={colors.patient} />
+        </View>
+        <View style={styles.wideTileBody}>
+          <Text style={styles.tileTitle}>My Documents</Text>
+          <Text style={styles.tileSubtitle}>
+            Upload records from other hospitals
+          </Text>
+        </View>
+        <Icon name="chevron_right" size={24} color={colors.faint} />
+      </Pressable>
+
       {/* Emergency SOS - the only red in the app */}
       <View style={styles.sosCard}>
         <View style={styles.sosTop}>
@@ -326,13 +379,13 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: radius.pill,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: overlay.onColorFill,
     alignItems: "center",
     justifyContent: "center",
   },
   callBody: { flex: 1, gap: 2 },
   callTitle: { ...type.labelLg, color: colors.onSuccess },
-  callSubtitle: { ...type.labelMd, color: "rgba(255,255,255,0.92)" },
+  callSubtitle: { ...type.labelMd, color: overlay.onColorText },
   callAction: {
     backgroundColor: colors.card,
     borderRadius: radius.md,
@@ -385,7 +438,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: radius.tile,
-    backgroundColor: "rgba(255,255,255,0.15)",
+    backgroundColor: overlay.onColorFill,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -393,13 +446,13 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: radius.pill,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: overlay.onColorFill,
     alignItems: "center",
     justifyContent: "center",
   },
   primaryFlag: {
     alignSelf: "flex-start",
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: overlay.onColorFill,
     borderRadius: radius.sm,
     paddingVertical: 2,
     paddingHorizontal: spacing.sm,
@@ -445,6 +498,24 @@ const styles = StyleSheet.create({
   flagMeta: { ...type.labelMd, color: colors.muted },
 
   tileRow: { flexDirection: "row", gap: spacing.md },
+  wideTile: {
+    ...elevation.level1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    minHeight: touch.row,
+  },
+  wideTileBody: { flex: 1, minWidth: 0 },
+  addDob: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    alignSelf: "flex-start",
+    minHeight: touch.min,
+  },
+  addDobText: { ...type.labelLg, color: colors.patient },
   tile: {
     ...elevation.level1,
     flex: 1,
@@ -479,13 +550,13 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: radius.pill,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    backgroundColor: overlay.onColorFill,
     alignItems: "center",
     justifyContent: "center",
   },
   sosBody: { flex: 1, minWidth: 0, gap: spacing.xs },
   sosTitle: { ...type.headlineLg, color: colors.onEmergency, letterSpacing: 0.5 },
-  sosText: { ...type.bodyMd, color: "rgba(255,255,255,0.95)" },
+  sosText: { ...type.bodyMd, color: overlay.onColorText },
   sosButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -497,7 +568,7 @@ const styles = StyleSheet.create({
   },
   sosButtonText: { ...type.headlineMd, color: colors.emergency },
   sosFooter: { flexDirection: "row", justifyContent: "space-between" },
-  sosFooterText: { ...type.labelMd, color: "rgba(255,255,255,0.85)" },
+  sosFooterText: { ...type.labelMd, color: overlay.onColorText },
 
   startOver: { alignItems: "center", paddingVertical: spacing.md },
   startOverText: { ...type.labelMd, color: colors.faint },

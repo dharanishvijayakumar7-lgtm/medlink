@@ -29,6 +29,10 @@ export default function PatientLayout() {
         />
         <Stack.Screen name="symptom-check" options={{ title: "Symptom check" }} />
         <Stack.Screen name="record" options={{ title: "My record" }} />
+        {/* Records from other hospitals - kept apart from My Record on purpose. */}
+        <Stack.Screen name="documents/index" options={{ title: "My documents" }} />
+        <Stack.Screen name="documents/upload" options={{ title: "Upload a record" }} />
+        <Stack.Screen name="documents/[id]" options={{ title: "Record summary" }} />
         <Stack.Screen name="facilities" options={{ title: "Nearby facilities" }} />
         <Stack.Screen name="sos" options={{ title: "Emergency SOS" }} />
       </Stack>

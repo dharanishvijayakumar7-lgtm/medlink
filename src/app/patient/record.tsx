@@ -20,7 +20,7 @@ import {
   TriageEntry,
   TriageStatus,
 } from "@/lib/api";
-import { formatDateTime, formatIsoDate } from "@/lib/format";
+import { ageShort, formatDateTime, formatIsoDate } from "@/lib/format";
 import { usePatientSession } from "@/lib/patient-session";
 import { colors, elevation, radius, spacing, type } from "@/lib/theme";
 
@@ -226,7 +226,7 @@ export default function MyRecord() {
         <View style={styles.patientCard}>
           <Text style={styles.patientName}>{record.name}</Text>
           <Text style={styles.patientMeta}>
-            {record.unique_code} · {record.age} yrs · {record.gender}
+            {record.unique_code} · {ageShort(record.age_label)} · {record.gender}
           </Text>
           <Text style={styles.patientMeta}>
             {record.village} · {record.phone} · speaks {record.preferred_language}

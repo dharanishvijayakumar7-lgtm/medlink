@@ -54,6 +54,13 @@ class ConsultationStatus(StrEnum):
     ENDED = "ENDED"
 
 
+class DocumentStatus(StrEnum):
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    DONE = "DONE"
+    FAILED = "FAILED"
+
+
 # --- Core records -----------------------------------------------------------
 
 
@@ -64,7 +71,14 @@ class Patient(Base):
     # Human-shareable identifier, format "MED-XXXXXX".
     unique_code: Mapped[str] = mapped_column(String(16), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(120))
-    age: Mapped[int] = mapped_column(Integer)
+    # Source of truth for age. Nullable only because patients registered before
+    # it existed never gave one - it is left null for them, never fabricated.
+    # Every displayed age is computed from this at request time.
+    date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # LEGACY. The self-reported number captured before date_of_birth existed.
+    # Kept (not dropped) so old rows lose no data, but no code reads or writes
+    # it any more: a stored age is a snapshot that is wrong a year later.
+    age: Mapped[int | None] = mapped_column(Integer, nullable=True)
     gender: Mapped[str] = mapped_column(String(20))
     # The voice agent matches callers on this, so it carries identity weight.
     phone: Mapped[str] = mapped_column(String(20), index=True)
@@ -86,6 +100,11 @@ class Patient(Base):
         back_populates="patient",
         cascade="all, delete-orphan",
         order_by="Referral.created_at.desc()",
+    )
+    documents: Mapped[list["MedicalDocument"]] = relationship(
+        back_populates="patient",
+        cascade="all, delete-orphan",
+        order_by="MedicalDocument.uploaded_at.desc()",
     )
 
 
@@ -246,3 +265,48 @@ class Consultation(Base):
 
     patient: Mapped["Patient"] = relationship()
     doctor: Mapped["Doctor"] = relationship()
+
+
+class MedicalDocument(Base):
+    """A record from another hospital, uploaded by the patient as a PDF.
+
+    Deliberately separate from MedLink's own history (triage, notes, referrals):
+    the patient sees documents under "My Documents", and only the doctor's
+    timeline merges the two.
+    """
+
+    __tablename__ = "medical_documents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    patient_id: Mapped[int] = mapped_column(
+        ForeignKey("patients.id", ondelete="CASCADE"), index=True
+    )
+    # Resolved values: what the patient typed wins, else what extraction read.
+    # The raw extracted values stay inside extracted_summary for comparison.
+    hospital_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    visit_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    hospital_name_entered: Mapped[bool] = mapped_column(Boolean, default=False)
+    visit_date_entered: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    original_filename: Mapped[str] = mapped_column(String(255))
+    # Relative to settings.uploads_dir, so the folder can move.
+    file_path: Mapped[str] = mapped_column(String(500))
+    file_size: Mapped[int] = mapped_column(Integer)
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
+
+    status: Mapped[str] = mapped_column(
+        String(20), default=DocumentStatus.PENDING, index=True
+    )
+    # ExtractedSummary as JSON: symptoms, medications, deficiencies, excesses,
+    # key_terms, plain_summary, suggested_next_steps (+ hospital, date, age read).
+    extracted_summary: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # A message safe to show the patient when status is FAILED.
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extraction_model: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    processed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    patient: Mapped["Patient"] = relationship(back_populates="documents")

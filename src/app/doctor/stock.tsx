@@ -14,7 +14,7 @@ import {
 import { api, Facility, StockItem } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useDoctorSession } from "@/lib/doctor-session";
-import { colors, spacing } from "@/lib/theme";
+import { colors, spacing, type } from "@/lib/theme";
 
 function StockRow({
   item,
@@ -37,8 +37,8 @@ function StockRow({
         value={item.available}
         disabled={busy}
         onValueChange={(next) => onToggle(item, next)}
-        trackColor={{ true: colors.success, false: colors.border }}
-        thumbColor="#FFFFFF"
+        trackColor={{ true: colors.success, false: colors.borderStrong }}
+        thumbColor={colors.card}
       />
     </View>
   );
@@ -202,7 +202,7 @@ export default function FacilityStockScreen() {
 }
 
 const styles = StyleSheet.create({
-  intro: { fontSize: 15, color: colors.muted, lineHeight: 21 },
+  intro: { ...type.bodyLg, color: colors.muted },
   group: { gap: 0, paddingVertical: spacing.xs },
   row: {
     flexDirection: "row",
@@ -214,9 +214,14 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   rowBody: { flex: 1, gap: 2 },
-  itemName: { fontSize: 16, color: colors.text, fontWeight: "500" },
-  itemState: { fontSize: 13, fontWeight: "600" },
+  itemName: { ...type.bodyMd, color: colors.text },
+  itemState: { ...type.labelMd },
   inStock: { color: colors.success },
   outStock: { color: colors.warning },
-  updated: { fontSize: 12, color: colors.faint, textAlign: "center" },
+  updated: {
+    ...type.labelMd,
+    fontFamily: type.bodyLg.fontFamily,
+    color: colors.muted,
+    textAlign: "center",
+  },
 });

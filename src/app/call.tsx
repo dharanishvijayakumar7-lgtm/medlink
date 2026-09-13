@@ -2,9 +2,10 @@ import { useRouter } from "expo-router";
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { Icon } from "@/components/icon";
 import { Button } from "@/components/ui";
 import { isWebRtcAvailable } from "@/lib/livekit";
-import { colors, radius, spacing } from "@/lib/theme";
+import { colors, overlay, radius, spacing, type } from "@/lib/theme";
 
 /**
  * The call route.
@@ -25,7 +26,7 @@ function CallUnavailable() {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.body}>
-        <Text style={styles.icon}>📹</Text>
+        <Icon name="videocam_off" size={48} color={colors.inverseOnSurface} />
         <Text style={styles.title}>Video calls need a development build</Text>
         <Text style={styles.text}>
           Expo Go does not include the WebRTC module LiveKit needs, so
@@ -35,12 +36,8 @@ function CallUnavailable() {
         <View style={styles.commandBox}>
           <Text style={styles.command}>npx expo run:android</Text>
         </View>
-        <Button
-          title="Go back"
-          onPress={() => router.back()}
-          tone="patient"
-          variant="outline"
-        />
+        {/* Solid, not outline: a teal outline is too faint on the dark screen. */}
+        <Button title="Go back" onPress={() => router.back()} tone="patient" />
       </View>
     </SafeAreaView>
   );
@@ -51,7 +48,7 @@ export default function CallScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#0B1220" },
+  screen: { flex: 1, backgroundColor: colors.ink },
   body: {
     flex: 1,
     alignItems: "center",
@@ -59,24 +56,13 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
     padding: spacing.xl,
   },
-  icon: { fontSize: 44 },
-  title: {
-    fontSize: 21,
-    fontWeight: "700",
-    color: "#FFFFFF",
-    textAlign: "center",
-  },
-  text: {
-    fontSize: 15,
-    color: "rgba(255,255,255,0.7)",
-    textAlign: "center",
-    lineHeight: 22,
-  },
+  title: { ...type.headlineMd, color: colors.inverseOnSurface, textAlign: "center" },
+  text: { ...type.bodyLg, color: overlay.onColorText, textAlign: "center" },
   commandBox: {
-    backgroundColor: "rgba(255,255,255,0.1)",
+    backgroundColor: overlay.onColorFill,
     borderRadius: radius.md,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
   },
-  command: { color: colors.patientTint, fontSize: 15, fontWeight: "600" },
+  command: { ...type.labelLg, color: colors.patientTint },
 });

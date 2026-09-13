@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models import (
     ConsultationNote,
     Doctor,
+    MedicalDocument,
     Patient,
     Referral,
     TriageEntry,
@@ -65,7 +66,13 @@ def create_patient(db: Session, **fields) -> Patient:
     )
 
 
-def load_patient(db: Session, unique_code: str, *, with_history: bool = False) -> Patient:
+def load_patient(
+    db: Session,
+    unique_code: str,
+    *,
+    with_history: bool = False,
+    with_documents: bool = False,
+) -> Patient:
     """Find a patient by their MedLink ID, or raise 404.
 
     Codes are matched case-insensitively so "med-482119" works as typed.
@@ -89,6 +96,11 @@ def load_patient(db: Session, unique_code: str, *, with_history: bool = False) -
             .selectinload(Doctor.facility),
             selectinload(Patient.referrals).selectinload(Referral.to_facility),
         )
+
+    if with_documents:
+        # Separate from with_history: the everyday patient record does not
+        # serialise documents, so it should not pay to load them.
+        query = query.options(selectinload(Patient.documents))
 
     patient = query.filter(Patient.unique_code == unique_code.strip().upper()).first()
     if patient is None:
