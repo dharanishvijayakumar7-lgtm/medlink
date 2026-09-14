@@ -39,6 +39,14 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-3.1-flash-lite"
     gemini_fallback_model: str = "gemini-3.5-flash-lite"
 
+    # The voice agent writes a summary of every call to Firestore. The API reads
+    # them back for a patient's call history using a service-account key file -
+    # currently the agent's own key, read in place and never copied or changed.
+    # The Firebase project comes from the key file itself.
+    firebase_credentials_file: Path | None = None
+    firestore_database: str = "(default)"
+    firestore_timeout_seconds: float = 10.0
+
     # Uploaded PDFs live on local disk for the hackathon. Move this to real
     # object storage before anything beyond a demo.
     uploads_dir: Path = BACKEND_DIR / "uploads"
@@ -56,6 +64,10 @@ class Settings(BaseSettings):
     @property
     def gemini_configured(self) -> bool:
         return bool(self.gemini_api_key)
+
+    @property
+    def firebase_configured(self) -> bool:
+        return bool(self.firebase_credentials_file and self.firebase_credentials_file.is_file())
 
 
 settings = Settings()

@@ -33,6 +33,9 @@ export default function PatientLayout() {
         <Stack.Screen name="documents/index" options={{ title: "My documents" }} />
         <Stack.Screen name="documents/upload" options={{ title: "Upload a record" }} />
         <Stack.Screen name="documents/[id]" options={{ title: "Record summary" }} />
+        {/* Calls to the voice agent, matched to the registered phone number. */}
+        <Stack.Screen name="calls/index" options={{ title: "Call history" }} />
+        <Stack.Screen name="calls/[id]" options={{ title: "Call summary" }} />
         <Stack.Screen name="facilities" options={{ title: "Nearby facilities" }} />
         <Stack.Screen name="sos" options={{ title: "Emergency SOS" }} />
       </Stack>

@@ -3,8 +3,9 @@
 Voice-based AI healthcare triage platform for rural India (SIH 2026).
 This service backs the React Native companion app: patient identity capture,
 symptom checks, the doctor queue, consultation notes, LiveKit teleconsultation
-rooms, tracked referrals, facility stock, the voice-agent phone handoff, and
-medical records patients upload from other hospitals.
+rooms, tracked referrals, facility stock, the voice-agent phone handoff,
+medical records patients upload from other hospitals, and each patient's call
+history from the voice agent.
 
 There is deliberately no authentication yet.
 """
@@ -20,6 +21,7 @@ from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app import document_processing
 from app.routers import (
+    calls,
     consultations,
     doctors,
     documents,
@@ -56,6 +58,10 @@ async def lifespan(app: FastAPI):
 
     if not settings.gemini_configured:
         logger.warning("GEMINI_API_KEY not set - uploaded documents will fail to process.")
+    if not settings.firebase_configured:
+        logger.warning(
+            "FIREBASE_CREDENTIALS_FILE not set or missing - call history will return 503."
+        )
     # Documents a restart left mid-flight would otherwise hang forever.
     resumed = document_processing.resume_unfinished()
     if resumed:
@@ -86,6 +92,7 @@ app.include_router(referrals.router)
 app.include_router(consultations.router)
 app.include_router(notes.router)
 app.include_router(documents.router)
+app.include_router(calls.router)
 
 
 @app.get("/health", tags=["meta"])
@@ -94,4 +101,5 @@ def health() -> dict[str, object]:
         "status": "ok",
         "livekit_configured": settings.livekit_configured,
         "gemini_configured": settings.gemini_configured,
+        "firebase_configured": settings.firebase_configured,
     }

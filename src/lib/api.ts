@@ -304,6 +304,63 @@ export type PatientTimeline = {
   entries: TimelineEntry[];
 };
 
+/** How urgent the voice agent judged a call. */
+export type CallUrgency = "unknown" | "self_care" | "clinic" | "urgent" | "emergency";
+
+export type CallMedicine = {
+  generic_name: string | null;
+  brand_names: string[];
+  adult_dose: string | null;
+  paediatric_dose: string | null;
+  max_daily_dose: string | null;
+  duration_limit_days: number | null;
+};
+
+export type CallAssessment = {
+  /** From the agent's reviewed triage knowledge base. */
+  category: string | null;
+  self_care_advice: string | null;
+  see_doctor_if: string | null;
+  /** Suggested by the agent's language model - always show the note with it. */
+  possible_causes: string[];
+  possible_causes_reasoning: string | null;
+  possible_causes_note: string | null;
+};
+
+/** One call to the MedLink voice agent, as the agent wrote it. */
+export type CallSummary = {
+  call_id: string;
+  schema_version: number | null;
+  /** "pstn" (phone line), "web" or "console" (test). */
+  channel: string | null;
+  /** e.g. "hi-IN". */
+  language: string | null;
+  started_at: string | null;
+  ended_at: string | null;
+  duration_sec: number | null;
+  returning_caller: boolean | null;
+  patient: {
+    name: string | null;
+    age_years: number | null;
+    gender: string | null;
+    is_for_child: boolean | null;
+    is_pregnant: boolean | null;
+  } | null;
+  chief_complaint: string | null;
+  symptom: Record<string, string | null> | null;
+  answers: Record<string, string>;
+  known_conditions: string[];
+  current_medications: string[];
+  medical_history: Record<string, string>[];
+  medicines_discussed: CallMedicine[];
+  assessment: CallAssessment | null;
+  severity_score: number | null;
+  urgency: CallUrgency | null;
+  disposition: string | null;
+  escalated: boolean;
+  summary_text: string | null;
+};
+
 export type Consultation = {
   id: number;
   room_name: string;
@@ -380,6 +437,14 @@ export const api = {
 
   getDocument: (documentId: number) =>
     request<MedicalDocument>(`/documents/${documentId}`),
+
+  // Call history from the voice agent. The server matches calls to the phone
+  // number on the patient's record; the app never sends a phone number.
+  getPatientCalls: (unique: string) =>
+    request<CallSummary[]>(`/patients/${code(unique)}/calls`),
+
+  getPatientCall: (unique: string, callId: string) =>
+    request<CallSummary>(`/patients/${code(unique)}/calls/${code(callId)}`),
 
   getPatientReferrals: (unique: string) =>
     request<Referral[]>(`/patients/${code(unique)}/referrals`),

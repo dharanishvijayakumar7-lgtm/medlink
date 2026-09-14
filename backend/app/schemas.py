@@ -474,4 +474,65 @@ class PatientTimeline(BaseModel):
     entries: list[TimelineEntry]
 
 
+# --- Voice-agent call summaries ------------------------------------------------
+#
+# Mirrors the documents the voice agent writes to Firestore (schema_version 1).
+# The agent is a separate codebase that drops empty fields and may add new ones,
+# so every field is optional and unknown fields are ignored.
+
+
+class CallPatientOut(BaseModel):
+    name: str | None = None
+    age_years: int | None = None
+    gender: str | None = None
+    is_for_child: bool | None = None
+    is_pregnant: bool | None = None
+
+
+class CallMedicineOut(BaseModel):
+    generic_name: str | None = None
+    brand_names: list[str] = Field(default_factory=list)
+    adult_dose: str | None = None
+    paediatric_dose: str | None = None
+    max_daily_dose: str | None = None
+    duration_limit_days: int | None = None
+
+
+class CallAssessmentOut(BaseModel):
+    # From the agent's reviewed triage knowledge base.
+    category: str | None = None
+    self_care_advice: str | None = None
+    see_doctor_if: str | None = None
+    # Suggested by the agent's language model. Always shown with the note.
+    possible_causes: list[str] = Field(default_factory=list)
+    possible_causes_reasoning: str | None = None
+    possible_causes_note: str | None = None
+
+
+class CallSummaryOut(BaseModel):
+    call_id: str
+    schema_version: int | None = None
+    channel: str | None = None
+    language: str | None = None
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    duration_sec: int | None = None
+    returning_caller: bool | None = None
+    patient: CallPatientOut | None = None
+    chief_complaint: str | None = None
+    symptom: dict[str, str | None] | None = None
+    answers: dict[str, str] = Field(default_factory=dict)
+    known_conditions: list[str] = Field(default_factory=list)
+    current_medications: list[str] = Field(default_factory=list)
+    medical_history: list[dict[str, str]] = Field(default_factory=list)
+    medicines_discussed: list[CallMedicineOut] = Field(default_factory=list)
+    assessment: CallAssessmentOut | None = None
+    severity_score: int | None = None
+    # unknown | self_care | clinic | urgent | emergency
+    urgency: str | None = None
+    disposition: str | None = None
+    escalated: bool = False
+    summary_text: str | None = None
+
+
 TriageByPhoneResult.model_rebuild()

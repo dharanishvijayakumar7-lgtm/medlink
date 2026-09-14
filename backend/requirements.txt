@@ -8,3 +8,7 @@ python-dotenv>=1.0
 livekit-api>=1.0
 google-genai>=2.0
 python-multipart>=0.0.20
+# Reads the voice agent's call summaries from Firestore with a service-account
+# key. Already pulled in by google-genai; listed because app.call_summaries
+# imports it directly.
+google-auth[requests]>=2.0

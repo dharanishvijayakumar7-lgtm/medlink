@@ -324,6 +324,24 @@ export default function PatientHome() {
         <Icon name="chevron_right" size={24} color={colors.faint} />
       </Pressable>
 
+      {/* Calls to the voice agent, matched to the registered phone number. */}
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => router.push("/patient/calls")}
+        style={({ pressed }) => [styles.wideTile, pressed && styles.pressed]}
+      >
+        <View style={[styles.tileIcon, { backgroundColor: colors.patientTint }]}>
+          <Icon name="phone_in_talk" size={28} color={colors.patient} />
+        </View>
+        <View style={styles.wideTileBody}>
+          <Text style={styles.tileTitle}>Call History</Text>
+          <Text style={styles.tileSubtitle}>
+            Summaries of your calls to MedLink
+          </Text>
+        </View>
+        <Icon name="chevron_right" size={24} color={colors.faint} />
+      </Pressable>
+
       {/* Emergency SOS - the only red in the app */}
       <View style={styles.sosCard}>
         <View style={styles.sosTop}>

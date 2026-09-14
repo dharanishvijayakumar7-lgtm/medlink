@@ -65,6 +65,9 @@ src/app/
       index.tsx              uploaded records, newest first
       upload.tsx             pick a PDF, optional hospital + visit date
       [id].tsx               plain-language summary + the original PDF
+    calls/                 call history from the voice agent (matched by phone)
+      index.tsx              calls from the registered number, newest first
+      [id].tsx               one call: summary, answers, medicines, advice
     facilities.tsx         facility finder with live stock
     sos.tsx                112 + live GPS fix
   doctor/                ── Doctor stack ───────────────────────────────
@@ -135,14 +138,14 @@ cd backend
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements.txt   # Windows
 
-cp .env.example .env        # DB password, LiveKit keys, GEMINI_API_KEY
+cp .env.example .env        # DB password, LiveKit keys, GEMINI_API_KEY, FIREBASE_CREDENTIALS_FILE
 createdb -U postgres medlink_app
 
 .venv/Scripts/python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 `--host 0.0.0.0` matters: a phone on your Wi-Fi needs to reach the API.
-`GET /health` reports whether LiveKit and Gemini are configured. Docs: <http://localhost:8000/docs>
+`GET /health` reports whether LiveKit, Gemini and Firestore (call history) are configured. Docs: <http://localhost:8000/docs>
 
 Uploaded PDFs are written to `backend/uploads/`, which is created on startup and
 gitignored. It holds real patient records, so never commit it or copy it off the
@@ -179,6 +182,8 @@ adb reverse tcp:8000 tcp:8000
 | `GET` | `/patients/{code}/documents` | a patient's uploaded records, newest first |
 | `GET` | `/documents/{id}` | one record, with its summary once `DONE` |
 | `GET` | `/documents/{id}/file` | the original PDF, shown inline |
+| `GET` | `/patients/{code}/calls` | call history: voice-agent calls from the patient's registered phone, newest first |
+| `GET` | `/patients/{code}/calls/{call_id}` | one of those calls |
 | `GET` | `/patients/{code}/referrals` | patient-facing referral tracker |
 | `POST` | `/patients/{code}/triage` | add a symptom check |
 | `POST` | `/patients/{code}/notes` | doctor note (+ high-risk flag, + follow-up date) |
@@ -198,7 +203,7 @@ adb reverse tcp:8000 tcp:8000
 | `GET` | `/consultations/pending/{code}` | patient polls for a waiting call |
 | `POST` | `/consultations/{id}/end` | close the room |
 | `POST` | `/doctors` | ephemeral doctor session |
-| `GET` | `/health` | liveness + LiveKit and Gemini status |
+| `GET` | `/health` | liveness + LiveKit, Gemini and Firestore status |
 
 ---
 
@@ -382,6 +387,39 @@ it, so the doctor sees the whole history in one scroll.
 - MedLink timestamps are stored in UTC and grouped by the server's local calendar
   day. Run the API on a machine set to IST: on a UTC server, events between
   midnight and 5:30 am IST land on the previous day.
+
+## Call history from the voice agent
+
+After every call, the voice agent (separate repository) writes a summary to
+Firestore in project `medlink-sih` at `patients/{+91XXXXXXXXXX}/calls/{call_id}`.
+**Call History** on the patient home screen shows those calls:
+
+```
+voice agent ──writes──> Firestore ──read by──> FastAPI ──> app (by MED-ID)
+```
+
+- The app asks `GET /patients/{code}/calls`. The API loads that patient from
+  PostgreSQL and turns their registered phone into the agent's id: `+91` plus the
+  last 10 digits. It then reads the calls from Firestore. The app never sends a
+  phone number.
+- The API reads Firestore with the service-account key in
+  `FIREBASE_CREDENTIALS_FILE` (currently the agent's own key, read in place, never
+  copied). Nothing talks to Firestore from the app, so it works in Expo Go.
+- `firebase/firestore.rules` denies all client access. Publish it from Firebase
+  console → Firestore → Rules. The agent and the API use server credentials, which
+  bypass rules.
+
+**What went wrong on 2026-09-14.** Creating "a new database" for the agent made
+the project's first and only Firestore database. The agent's rules were then
+published to it, and those rules let any signed-in user read every caller's
+summaries. Patient details were never in Firebase: they are in PostgreSQL and were
+never affected. The app's "cannot reach the server" error was the FastAPI backend
+not running.
+
+**Limits.** Calls match on the phone number given at registration, so it must be
+the number the patient calls from. A shared household phone shares its call
+history. With no login yet, anyone with a MED-ID can open that patient's call
+history, the same as the rest of their record.
 
 ## Design decisions worth knowing
 
