@@ -1,6 +1,11 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+// Gesture-handler's Pressable hit-tests natively. React Native's measures the
+// button on screen, and after Search ID > record > back that measurement comes
+// back 88dp low (react-native-screens counts the header twice), so every tap on
+// a small button here was cancelled.
+import { Pressable } from "react-native-gesture-handler";
 
 import { FollowUpCard } from "@/components/follow-up-card";
 import { Icon } from "@/components/icon";
@@ -171,7 +176,12 @@ export default function DoctorQueue() {
           <Pressable
             key={action.label}
             accessibilityRole="button"
-            onPress={() => router.push(action.href as never)}
+            // TEMP DEBUG: confirms the tap now completes.
+            onPressIn={() => console.log("[debug] pressIn", action.label)}
+            onPress={() => {
+              console.log("[debug] press", action.label);
+              router.push(action.href as never);
+            }}
             style={({ pressed }) => [styles.navAction, pressed && styles.pressed]}
           >
             <Icon name={action.icon} size={22} color={colors.doctor} />

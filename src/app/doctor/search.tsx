@@ -22,8 +22,7 @@ export default function SearchPatient() {
       return;
     }
 
-    // Close the keyboard before navigating. Leaving it open across the push and
-    // the later back gesture left the queue screen unable to receive taps.
+    // Close the keyboard so the loading state on the button is not hidden.
     Keyboard.dismiss();
     setError(null);
     setSearching(true);

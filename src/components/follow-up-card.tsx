@@ -1,4 +1,6 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+// Gesture-handler's Pressable: see the note in src/app/doctor/queue.tsx.
+import { Pressable } from "react-native-gesture-handler";
 
 import { Icon } from "@/components/icon";
 import { FollowUpItem } from "@/lib/api";

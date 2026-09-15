@@ -9,6 +9,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { colors } from "@/lib/theme";
 
@@ -43,7 +44,8 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <>
+    // Needed by the gesture-handler Pressable the doctor queue uses.
+    <GestureHandlerRootView style={{ flex: 1 }}>
       {/* Role select has a light background; each role stack sets its own. */}
       <StatusBar style="dark" />
       <Stack
@@ -60,6 +62,6 @@ export default function RootLayout() {
           options={{ presentation: "fullScreenModal", gestureEnabled: false }}
         />
       </Stack>
-    </>
+    </GestureHandlerRootView>
   );
 }
