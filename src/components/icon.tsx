@@ -16,6 +16,8 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 const COMMUNITY_ONLY: Record<string, string> = {
   stethoscope: "stethoscope",
   clinical_notes: "clipboard-pulse-outline",
+  monitoring: "chart-timeline-variant",
+  emergency_home: "home-alert-outline",
 };
 
 export type IconName = string;

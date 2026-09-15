@@ -1,7 +1,4 @@
-import DateTimePicker, {
-  DateTimePickerAndroid,
-  type DateTimePickerEvent,
-} from "@react-native-community/datetimepicker";
+import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
 import { useState } from "react";
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -58,10 +55,6 @@ export function PastDateField({
     ? fromIso(value)
     : new Date(today.getFullYear() - openYearsAgo, today.getMonth(), today.getDate());
 
-  function handlePicked(event: DateTimePickerEvent, picked?: Date) {
-    if (event.type === "set" && picked) onChange(toIsoDate(picked));
-  }
-
   function open() {
     if (Platform.OS === "android") {
       DateTimePickerAndroid.open({
@@ -69,7 +62,8 @@ export function PastDateField({
         mode: "date",
         maximumDate: today,
         minimumDate: EARLIEST,
-        onChange: handlePicked,
+        // Only fires on a real pick; dismissing the dialog leaves the value alone.
+        onValueChange: (_event, picked) => onChange(toIsoDate(picked)),
       });
     } else {
       setShowIos((shown) => !shown);
@@ -120,9 +114,7 @@ export function PastDateField({
             display="spinner"
             maximumDate={today}
             minimumDate={EARLIEST}
-            onChange={(_event, picked) => {
-              if (picked) onChange(toIsoDate(picked));
-            }}
+            onValueChange={(_event, picked) => onChange(toIsoDate(picked))}
           />
           <Pressable onPress={() => setShowIos(false)} style={styles.iosDone} hitSlop={12}>
             <Text style={styles.iosDoneText}>Done</Text>

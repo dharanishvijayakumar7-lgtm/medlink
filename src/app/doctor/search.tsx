@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Keyboard, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { Icon } from "@/components/icon";
 import { Button, ErrorBanner, Screen } from "@/components/ui";
@@ -22,6 +22,9 @@ export default function SearchPatient() {
       return;
     }
 
+    // Close the keyboard before navigating. Leaving it open across the push and
+    // the later back gesture left the queue screen unable to receive taps.
+    Keyboard.dismiss();
     setError(null);
     setSearching(true);
     try {
