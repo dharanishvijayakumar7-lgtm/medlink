@@ -177,6 +177,14 @@ class TriageAnswer(BaseModel):
     answer: str
 
 
+class VoiceCause(BaseModel):
+    """A likely cause from the voice symptom check, split so the name can be
+    highlighted."""
+
+    name: str
+    why: str
+
+
 class TriageAssessment(BaseModel):
     """The symptom check result, in English. See app/triage_assessment.py."""
 
@@ -189,6 +197,14 @@ class TriageAssessment(BaseModel):
     # "gemini" or "rules" - rules alone when Gemini was unavailable.
     source: str
     model: str | None = None
+
+    # Voice symptom check only (see app/voice_triage.py); empty otherwise.
+    keywords: list[str] = []
+    causes: list[VoiceCause] = []
+    what_not_to_do: list[str] = []
+    # What the patient said, in their own language, and which language.
+    transcript: str | None = None
+    transcript_language: str | None = None
 
 
 class TriageEntryCreate(BaseModel):

@@ -1,4 +1,5 @@
-"""Text translation through Bhashini (MeitY's Indian-language AI platform).
+"""Translation and speech-to-text through Bhashini (MeitY's Indian-language AI
+platform).
 
 Bhashini works in two steps:
   1. ask the pipeline config endpoint which service handles a language pair.
@@ -233,3 +234,140 @@ def restore(text: str, names: list[str]) -> str | None:
             return None
         text = text.replace(token, name)
     return text
+
+
+# --- Speech to text -------------------------------------------------------------
+#
+# The voice symptom check sends a short WAV recording. ASR and, for Indian
+# languages, translation to English run as one pipeline call, so the server
+# gets both the patient's own words and an English version for the doctor and
+# Gemini. The pipeline config is cached per language, like translation.
+
+_ASR_TIMEOUT = 90
+
+
+@dataclass(frozen=True)
+class _SpeechPipeline:
+    asr_service_id: str
+    translation_service_id: str | None
+    url: str
+    key_name: str
+    key_value: str
+
+
+_speech_pipelines: dict[str, _SpeechPipeline] = {}
+
+
+def _speech_tasks(language: str) -> list[dict]:
+    tasks = [{"taskType": "asr", "config": {"language": {"sourceLanguage": language}}}]
+    if language != "en":
+        tasks.append(_task(language, "en"))
+    return tasks
+
+
+def _speech_pipeline(language: str) -> _SpeechPipeline:
+    with _lock:
+        cached = _speech_pipelines.get(language)
+    if cached:
+        return cached
+
+    try:
+        response = requests.post(
+            CONFIG_URL,
+            headers={
+                "userID": settings.bhashini_user_id,
+                "ulcaApiKey": settings.bhashini_api_key,
+            },
+            json={
+                "pipelineTasks": _speech_tasks(language),
+                "pipelineRequestConfig": {"pipelineId": settings.bhashini_pipeline_id},
+            },
+            timeout=_CONFIG_TIMEOUT,
+        )
+        response.raise_for_status()
+        body = response.json()
+        configs = body["pipelineResponseConfig"]
+        endpoint = body["pipelineInferenceAPIEndPoint"]
+        pipeline = _SpeechPipeline(
+            asr_service_id=configs[0]["config"][0]["serviceId"],
+            translation_service_id=(
+                configs[1]["config"][0]["serviceId"] if language != "en" else None
+            ),
+            url=endpoint["callbackUrl"],
+            key_name=endpoint["inferenceApiKey"]["name"],
+            key_value=endpoint["inferenceApiKey"]["value"],
+        )
+    except requests.HTTPError as error:
+        logger.error(
+            "Bhashini speech config %s failed: %s %s",
+            language, error.response.status_code, error.response.text[:300],
+        )
+        raise BhashiniFailed("Bhashini rejected the speech config request") from error
+    except (requests.RequestException, KeyError, IndexError, TypeError, ValueError) as error:
+        logger.error("Bhashini speech config %s failed: %r", language, error)
+        raise BhashiniFailed("Bhashini speech config was unusable") from error
+
+    with _lock:
+        _speech_pipelines[language] = pipeline
+    return pipeline
+
+
+def transcribe(audio_base64: str, language: str, sampling_rate: int) -> tuple[str, str]:
+    """Speech in ``language`` (a base64 WAV) -> (what was said, English).
+
+    For English speech both values are the same transcript. Either may be
+    empty when nothing intelligible was said.
+    """
+    if not settings.bhashini_configured:
+        raise BhashiniNotConfigured("BHASHINI_USER_ID / BHASHINI_API_KEY are not set.")
+    if language not in SUPPORTED:
+        raise ValueError(f"unsupported language {language}")
+
+    pipeline = _speech_pipeline(language)
+    tasks: list[dict] = [
+        {
+            "taskType": "asr",
+            "config": {
+                "language": {"sourceLanguage": language},
+                "serviceId": pipeline.asr_service_id,
+                "audioFormat": "wav",
+                "samplingRate": sampling_rate,
+                # Lets recordings longer than 30 seconds through.
+                "preProcessors": ["vad"],
+            },
+        }
+    ]
+    if pipeline.translation_service_id:
+        task = _task(language, "en")
+        task["config"]["serviceId"] = pipeline.translation_service_id
+        tasks.append(task)
+
+    try:
+        response = requests.post(
+            pipeline.url,
+            headers={pipeline.key_name: pipeline.key_value},
+            json={"pipelineTasks": tasks, "inputData": {"audio": [{"audioContent": audio_base64}]}},
+            timeout=_ASR_TIMEOUT,
+        )
+        response.raise_for_status()
+        results = response.json()["pipelineResponse"]
+        transcript = (results[0]["output"][0].get("source") or "").strip()
+        english = (
+            (results[1]["output"][0].get("target") or "").strip()
+            if pipeline.translation_service_id
+            else transcript
+        )
+    except requests.HTTPError as error:
+        if error.response.status_code in (401, 403):
+            with _lock:
+                _speech_pipelines.pop(language, None)
+        logger.error(
+            "Bhashini speech %s failed: %s %s",
+            language, error.response.status_code, error.response.text[:300],
+        )
+        raise BhashiniFailed("Bhashini rejected the speech request") from error
+    except (requests.RequestException, KeyError, IndexError, TypeError, ValueError) as error:
+        logger.error("Bhashini speech %s failed: %r", language, error)
+        raise BhashiniFailed("Bhashini speech result was unusable") from error
+
+    return transcript, english

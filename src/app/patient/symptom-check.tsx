@@ -5,7 +5,8 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { DocumentDisclaimer } from "@/components/document-disclaimer";
 import { Icon } from "@/components/icon";
 import { Button, Card, ErrorBanner, Screen, SectionTitle, TextField } from "@/components/ui";
-import { api, TriageAnswer, TriageAssessment, TriageUrgency } from "@/lib/api";
+import { VoiceResult, voiceResultT, VoiceSymptomInput } from "@/components/voice-symptom-check";
+import { api, TriageAnswer, TriageAssessment, TriageEntry, TriageUrgency } from "@/lib/api";
 import { TranslationKey, useT } from "@/lib/i18n";
 import { usePatientSession } from "@/lib/patient-session";
 import { colors, elevation, radius, spacing, type } from "@/lib/theme";
@@ -296,13 +297,15 @@ function AssessmentView({ assessment }: { assessment: TriageAssessment }) {
 export default function SymptomCheck() {
   const router = useRouter();
   const { session } = usePatientSession();
-  const { t } = useT();
+  const { t, language } = useT();
 
   const [index, setIndex] = useState(0);
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [assessment, setAssessment] = useState<TriageAssessment | null>(null);
+  // The result of a spoken symptom check, which replaces the questions.
+  const [voiceEntry, setVoiceEntry] = useState<TriageEntry | null>(null);
   // Saved, but the server returned no result (should not happen, but the
   // patient must still be told their answers are safe).
   const [savedWithoutResult, setSavedWithoutResult] = useState(false);
@@ -367,16 +370,17 @@ export default function SymptomCheck() {
     }
   }
 
-  const finishButtons = (
+  // `tr` lets the voice result show these in the language that was spoken.
+  const finishButtons = (tr: typeof t = t) => (
     <>
       <Button
-        title={t("symptom.viewRecord")}
+        title={tr("symptom.viewRecord")}
         icon="folder_shared"
         onPress={() => router.replace("/patient/record")}
         tone="patient"
       />
       <Button
-        title={t("symptom.backHome")}
+        title={tr("symptom.backHome")}
         onPress={() => router.back()}
         tone="patient"
         variant="outline"
@@ -384,11 +388,20 @@ export default function SymptomCheck() {
     </>
   );
 
+  if (voiceEntry?.assessment) {
+    return (
+      <Screen>
+        <VoiceResult entry={voiceEntry} />
+        {finishButtons(voiceResultT(voiceEntry, language))}
+      </Screen>
+    );
+  }
+
   if (assessment) {
     return (
       <Screen>
         <AssessmentView assessment={assessment} />
-        {finishButtons}
+        {finishButtons()}
       </Screen>
     );
   }
@@ -401,7 +414,7 @@ export default function SymptomCheck() {
           <Text style={styles.doneTitle}>{t("symptom.savedTitle")}</Text>
           <Text style={styles.doneBody}>{t("symptom.result.saved")}</Text>
         </View>
-        {finishButtons}
+        {finishButtons()}
       </Screen>
     );
   }
@@ -423,6 +436,13 @@ export default function SymptomCheck() {
 
   return (
     <Screen>
+      {index === 0 ? (
+        <>
+          <VoiceSymptomInput onResult={setVoiceEntry} />
+          <Text style={styles.orAnswer}>{t("voice.orAnswer")}</Text>
+        </>
+      ) : null}
+
       <View style={styles.progress}>
         <View style={styles.progressRow}>
           <View style={styles.progressLeft}>
@@ -526,6 +546,13 @@ export default function SymptomCheck() {
 
 const styles = StyleSheet.create({
   pressed: { opacity: 0.9 },
+
+  orAnswer: {
+    ...type.labelLg,
+    color: colors.muted,
+    textAlign: "center",
+    marginVertical: spacing.xs,
+  },
 
   progress: { gap: spacing.xs },
   progressRow: {

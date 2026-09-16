@@ -25,6 +25,16 @@ export const API_BASE_URL = resolveBaseUrl();
 /** Most calls answer in well under a second; a symptom check waits on Gemini. */
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+/** A request the server answered with an error status. */
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.status = status;
+  }
+}
+
 async function request<T>(
   path: string,
   init?: RequestInit,
@@ -59,7 +69,7 @@ async function request<T>(
   }
 
   if (!response.ok) {
-    throw new Error(await readError(response));
+    throw new ApiError(await readError(response), response.status);
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
@@ -137,6 +147,13 @@ export type TriageAssessment = {
   /** "rules" when Gemini was unavailable. */
   source: string;
   model: string | null;
+  /** Voice symptom check only; absent or empty otherwise. */
+  keywords?: string[];
+  causes?: { name: string; why: string }[];
+  what_not_to_do?: string[];
+  /** What the patient said, in their own language. */
+  transcript?: string | null;
+  transcript_language?: string | null;
 };
 
 export type TriageEntry = {
@@ -519,6 +536,18 @@ export const api = {
     unique: string,
     entry: { answers: TriageAnswer[]; summary?: string },
   ) => post<TriageEntry>(`/patients/${code(unique)}/triage`, entry),
+
+  /**
+   * A spoken symptom check: a 16-bit PCM WAV of the patient describing how
+   * they feel, in `language`. Transcription and the assessment can take a
+   * while on a slow connection.
+   */
+  addVoiceTriage: (unique: string, wav: Uint8Array, language: string) =>
+    request<TriageEntry>(
+      `/patients/${code(unique)}/voice-triage?language=${encodeURIComponent(language)}`,
+      { method: "POST", body: wav as unknown as BodyInit, headers: { "Content-Type": "audio/wav" } },
+      120_000,
+    ),
 
   addConsultationNote: (
     unique: string,

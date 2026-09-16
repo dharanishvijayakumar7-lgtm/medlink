@@ -32,6 +32,7 @@ from app.routers import (
     sign_in,
     translate,
     triage,
+    voice_triage,
 )
 from app.schema_sync import sync_schema
 from app.seed import seed_facilities, seed_stock
@@ -99,6 +100,7 @@ app.include_router(notes.router)
 app.include_router(documents.router)
 app.include_router(calls.router)
 app.include_router(translate.router)
+app.include_router(voice_triage.router)
 
 
 @app.get("/health", tags=["meta"])

@@ -55,7 +55,8 @@
       ],
       "@livekit/react-native-expo-plugin",
       "@config-plugins/react-native-webrtc",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true,

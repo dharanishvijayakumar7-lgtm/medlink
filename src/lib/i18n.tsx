@@ -76,7 +76,23 @@ export function currentLocale(): string {
  * `<key>_one` is used for 1 and `<key>_other` otherwise, if they exist.
  */
 export function translate(key: TranslationKey | string, vars?: Vars): string {
-  const dictionary = DICTIONARIES[current];
+  return translateIn(current, key, vars);
+}
+
+export function isSupportedLanguage(value: string | null | undefined): value is LanguageCode {
+  return LANGUAGES.some((language) => language.code === value);
+}
+
+/**
+ * `translate` in a given language rather than the app's - for text that must
+ * match something else, such as a voice check answered in another language.
+ */
+export function translateIn(
+  language: LanguageCode,
+  key: TranslationKey | string,
+  vars?: Vars,
+): string {
+  const dictionary = DICTIONARIES[language];
   let lookup = key as string;
   if (vars && typeof vars.count === "number") {
     const plural = `${key}_${vars.count === 1 ? "one" : "other"}`;

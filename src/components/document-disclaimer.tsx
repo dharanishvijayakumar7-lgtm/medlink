@@ -12,9 +12,12 @@ import { colors, radius, spacing, type } from "@/lib/theme";
 export function DocumentDisclaimer({
   text,
   compact = false,
+  lead,
 }: {
   text: string;
   compact?: boolean;
+  /** The heading line, when it must be in a language other than the app's. */
+  lead?: string;
 }) {
   const { t } = useT();
   return (
@@ -25,7 +28,7 @@ export function DocumentDisclaimer({
     >
       <Icon name="info" size={compact ? 20 : 24} color={colors.warning} />
       <View style={styles.body}>
-        <Text style={styles.lead}>{t("disclaimer.lead")}</Text>
+        <Text style={styles.lead}>{lead ?? t("disclaimer.lead")}</Text>
         {compact ? null : <Text style={styles.text}>{text}</Text>}
       </View>
     </View>
