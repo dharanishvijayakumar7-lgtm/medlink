@@ -1,194 +1,197 @@
-import { useFocusEffect } from "expo-router";
+import * as Location from "expo-location";
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Icon } from "@/components/icon";
-import { EmptyState, ErrorBanner, Loading, Screen } from "@/components/ui";
-import { api, Facility, StockItem } from "@/lib/api";
-import { formatDateTime } from "@/lib/format";
-import { translate, useT } from "@/lib/i18n";
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorBanner,
+  LinkButton,
+  Screen,
+  TextField,
+} from "@/components/ui";
+import { api, ApiError, LocatedPlace, NearbyFacility } from "@/lib/api";
+import { translate, TranslationKey, useT } from "@/lib/i18n";
 import { colors, elevation, radius, spacing, type } from "@/lib/theme";
 
-const ALL = "All";
+/** The server searches this far; shown to the patient. */
+const RADIUS_KM = 25;
 
-function countAvailable(items: StockItem[]) {
-  return items.filter((item) => item.available).length;
+type Kind = NearbyFacility["kind"];
+const ALL = "all";
+type Filter = typeof ALL | Kind;
+
+const KIND_LABEL: Record<Kind, TranslationKey> = {
+  hospital: "facilities.kind.hospital",
+  clinic: "facilities.kind.clinic",
+  health_centre: "facilities.kind.healthCentre",
+};
+
+const KIND_ICON: Record<Kind, string> = {
+  hospital: "local_hospital",
+  clinic: "medical_services",
+  health_centre: "health_and_safety",
+};
+
+const FILTER_LABEL: Record<Kind, TranslationKey> = {
+  hospital: "facilities.filter.hospitals",
+  clinic: "facilities.filter.clinics",
+  health_centre: "facilities.filter.healthCentres",
+};
+
+function distanceLabel(km: number): string {
+  return km < 1
+    ? translate("facilities.distanceM", { m: Math.max(50, Math.round((km * 1000) / 50) * 50) })
+    : translate("facilities.distanceKm", { km: km.toFixed(1) });
 }
 
-function StockList({ items }: { items: StockItem[] }) {
+function FacilityCard({ facility }: { facility: NearbyFacility }) {
   const { t } = useT();
-  return (
-    <View style={styles.stockList}>
-      {items.map((item) => (
-        <View key={item.id} style={styles.stockRow}>
-          <Icon
-            name={item.available ? "check_circle" : "cancel"}
-            size={18}
-            color={item.available ? colors.success : colors.warning}
-          />
-          <Text
-            style={[styles.stockName, !item.available && styles.stockNameOut]}
-            numberOfLines={1}
-          >
-            {item.item_name}
-          </Text>
-          <Text
-            style={[
-              styles.stockState,
-              { color: item.available ? colors.success : colors.warning },
-            ]}
-          >
-            {item.available ? t("facilities.inStock") : t("facilities.out")}
-          </Text>
-        </View>
-      ))}
-    </View>
-  );
-}
-
-function FacilityCard({ facility }: { facility: Facility }) {
-  const { t } = useT();
-  const [open, setOpen] = useState(false);
-
-  const medicines = facility.stock.filter((item) => item.item_type === "medicine");
-  const diagnostics = facility.stock.filter((item) => item.item_type === "diagnostic");
-  const lastUpdated = facility.stock.reduce<string | null>(
-    (latest, item) => (!latest || item.updated_at > latest ? item.updated_at : latest),
-    null,
-  );
-
   return (
     <View style={styles.card}>
       <View style={styles.cardTop}>
         <View style={styles.cardHeading}>
           <View style={styles.typeChip}>
-            <Text style={styles.typeChipText}>{facility.type.toUpperCase()}</Text>
+            <Text style={styles.typeChipText}>{t(KIND_LABEL[facility.kind]).toUpperCase()}</Text>
           </View>
+          {/* Place names are shown as they are on the map, never translated. */}
           <Text style={styles.facilityName}>{facility.name}</Text>
         </View>
         <View style={styles.facilityIcon}>
-          <Icon name="local_hospital" size={24} color={colors.patient} />
+          <Icon name={KIND_ICON[facility.kind]} size={24} color={colors.patient} />
         </View>
       </View>
 
       <View style={styles.distanceRow}>
         <Icon name="near_me" size={20} color={colors.patient} />
-        <Text style={styles.distanceText}>{facility.area_label}</Text>
+        <Text style={styles.distanceText}>{distanceLabel(facility.distance_km)}</Text>
       </View>
 
-      {facility.stock.length > 0 ? (
-        <>
-          <View style={styles.badgeRow}>
-            <View style={styles.stockBadge}>
-              <Icon name="medication" size={16} color={colors.onPrimaryContainer} />
-              <Text style={styles.stockBadgeText}>
-                {t("facilities.medicinesCount", {
-                  available: countAvailable(medicines),
-                  total: medicines.length,
-                })}
-              </Text>
-            </View>
-            <View style={styles.stockBadgeAlt}>
-              <Icon name="vaccines" size={16} color={colors.onSecondaryContainer} />
-              <Text style={styles.stockBadgeAltText}>
-                {t("facilities.testsCount", {
-                  available: countAvailable(diagnostics),
-                  total: diagnostics.length,
-                })}
-              </Text>
-            </View>
-          </View>
-
-          {open ? (
-            <>
-              {medicines.length > 0 ? (
-                <>
-                  <Text style={styles.groupLabel}>{t("timeline.medicines")}</Text>
-                  <StockList items={medicines} />
-                </>
-              ) : null}
-              {diagnostics.length > 0 ? (
-                <>
-                  <Text style={styles.groupLabel}>{t("facilities.testsLabel")}</Text>
-                  <StockList items={diagnostics} />
-                </>
-              ) : null}
-              {lastUpdated ? (
-                <Text style={styles.updated}>
-                  {t("facilities.stockUpdated", { time: formatDateTime(lastUpdated) })}
-                </Text>
-              ) : null}
-            </>
-          ) : null}
-
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => setOpen(!open)}
-            style={({ pressed }) => [styles.expandButton, pressed && styles.pressed]}
-          >
-            <Icon
-              name={open ? "expand_less" : "expand_more"}
-              size={24}
-              color={colors.patient}
-            />
-            <Text style={styles.expandText}>
-              {open ? t("facilities.hideAvailable") : t("facilities.seeAvailable")}
-            </Text>
-          </Pressable>
-        </>
-      ) : (
-        <Text style={styles.noStock}>{t("facilities.noStock")}</Text>
-      )}
+      {facility.address ? <Text style={styles.address}>{facility.address}</Text> : null}
     </View>
   );
 }
 
+/**
+ * Real clinics and hospitals near a place the patient chooses - their current
+ * location or a village, town or PIN code they type - from OpenStreetMap.
+ */
 export default function NearbyFacilities() {
   const { t } = useT();
-  const [facilities, setFacilities] = useState<Facility[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [place, setPlace] = useState<LocatedPlace | null>(null);
+  const [changing, setChanging] = useState(false);
+  const [query, setQuery] = useState("");
+  const [locating, setLocating] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [facilities, setFacilities] = useState<NearbyFacility[] | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<string>(ALL);
+  const [filter, setFilter] = useState<Filter>(ALL);
 
-  // No synchronous setState, so this is safe to call straight from an effect.
-  const load = useCallback(async () => {
+  const loadNearby = useCallback(async (at: LocatedPlace) => {
+    setLoading(true);
+    setError(null);
     try {
-      setFacilities(await api.getFacilities());
-      setError(null);
+      setFacilities(await api.getNearbyFacilities(at.latitude, at.longitude));
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : translate("facilities.loadFailed"),
+        caught instanceof ApiError && caught.status === 503
+          ? translate("facilities.unavailable")
+          : caught instanceof Error
+            ? caught.message
+            : translate("facilities.loadFailed"),
       );
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Pull-to-refresh and retry come from event handlers, where showing the
-  // spinner immediately is fine.
+  function choose(next: LocatedPlace) {
+    setPlace(next);
+    setChanging(false);
+    setFilter(ALL);
+    setFacilities(null);
+    loadNearby(next);
+  }
+
+  async function useCurrentLocation() {
+    setError(null);
+    setLocating(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        setError(t("facilities.permissionDenied"));
+        return;
+      }
+      const position = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      const { latitude, longitude } = position.coords;
+      // A readable name if the phone can find one; the list works without it.
+      let label = t("facilities.currentLocation");
+      try {
+        const [address] = await Location.reverseGeocodeAsync({ latitude, longitude });
+        label =
+          address?.city || address?.district || address?.subregion || address?.region || label;
+      } catch {
+        // Keep the generic label.
+      }
+      choose({ latitude, longitude, label });
+    } catch {
+      setError(t("sos.locationFailed"));
+    } finally {
+      setLocating(false);
+    }
+  }
+
+  async function searchPlace() {
+    const text = query.trim();
+    if (text.length < 2) {
+      setError(t("facilities.typePlace"));
+      return;
+    }
+    setError(null);
+    setSearching(true);
+    try {
+      choose(await api.locatePlace(text));
+    } catch (caught) {
+      setError(
+        caught instanceof ApiError && caught.status === 404
+          ? t("facilities.notFound")
+          : caught instanceof ApiError && caught.status >= 500
+            ? t("facilities.searchUnavailable")
+            : caught instanceof Error
+              ? caught.message
+              : t("common.somethingWrong"),
+      );
+    } finally {
+      setSearching(false);
+    }
+  }
+
   const refresh = useCallback(() => {
-    setLoading(true);
-    load();
-  }, [load]);
+    if (place) loadNearby(place);
+  }, [place, loadNearby]);
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
-  );
-
-  const types = useMemo(
-    () => [ALL, ...Array.from(new Set(facilities.map((item) => item.type)))],
+  const kinds = useMemo(
+    () => (["hospital", "clinic", "health_centre"] as Kind[]).filter((kind) =>
+      (facilities ?? []).some((item) => item.kind === kind),
+    ),
     [facilities],
   );
 
-  const visible =
-    filter === ALL ? facilities : facilities.filter((item) => item.type === filter);
-
-  if (loading && facilities.length === 0) return <Loading label={t("facilities.loading")} />;
+  const choosing = place === null || changing;
+  const list = facilities ?? [];
+  const visible = filter === ALL ? list : list.filter((item) => item.kind === filter);
 
   return (
-    <Screen refreshing={loading} onRefresh={refresh} contentStyle={styles.content}>
+    <Screen
+      refreshing={loading && facilities !== null}
+      onRefresh={place && !choosing ? refresh : undefined}
+      contentStyle={styles.content}
+    >
       <View style={styles.locationBanner}>
         <View style={styles.locationRow}>
           <Icon name="location_on" size={20} color={colors.patient} />
@@ -198,50 +201,128 @@ export default function NearbyFacilities() {
         <Text style={styles.bannerBody}>{t("facilities.bannerBody")}</Text>
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-      >
-        {types.map((option) => {
-          const selected = option === filter;
-          const label =
-            option === ALL ? t("facilities.all", { count: facilities.length }) : option;
-          return (
-            <Pressable
-              key={option}
-              accessibilityRole="radio"
-              accessibilityState={{ selected }}
-              onPress={() => setFilter(option)}
-              style={[styles.filterPill, selected && styles.filterPillOn]}
-            >
-              {option === ALL ? (
-                <Icon
-                  name="verified"
-                  size={18}
-                  color={selected ? colors.onPatient : colors.text}
-                />
-              ) : null}
-              <Text style={[styles.filterText, selected && styles.filterTextOn]}>
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      {choosing ? (
+        <Card style={styles.chooser}>
+          <Text style={styles.chooserTitle}>{t("facilities.locationTitle")}</Text>
+          <Button
+            title={t("facilities.useCurrent")}
+            icon="my_location"
+            onPress={useCurrentLocation}
+            loading={locating}
+            disabled={searching}
+            tone="patient"
+          />
+          <Text style={styles.or}>{t("facilities.or")}</Text>
+          <TextField
+            label={t("facilities.searchLabel")}
+            labelIcon="search"
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t("facilities.searchPlaceholder")}
+            autoCapitalize="words"
+            returnKeyType="search"
+            onSubmitEditing={searchPlace}
+          />
+          <Button
+            title={t("facilities.search")}
+            icon="search"
+            onPress={searchPlace}
+            loading={searching}
+            disabled={locating}
+            tone="patient"
+            variant="outline"
+          />
+          {place ? (
+            <View style={styles.cancelRow}>
+              <LinkButton
+                title={t("facilities.cancelChange")}
+                tone="patient"
+                onPress={() => {
+                  setChanging(false);
+                  setError(null);
+                }}
+              />
+            </View>
+          ) : null}
+        </Card>
+      ) : (
+        <View style={styles.placeRow}>
+          <Icon name="my_location" size={22} color={colors.patient} />
+          <Text style={styles.placeText}>
+            {t("facilities.showingNear", { km: RADIUS_KM, place: place!.label })}
+          </Text>
+          <LinkButton
+            title={t("facilities.change")}
+            tone="patient"
+            onPress={() => {
+              setChanging(true);
+              setError(null);
+            }}
+          />
+        </View>
+      )}
 
-      {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
+      {error ? (
+        <ErrorBanner message={error} onRetry={!choosing && place ? refresh : undefined} />
+      ) : null}
 
-      {visible.length === 0 ? (
+      {choosing ? null : loading && facilities === null ? (
+        <View style={styles.loadingBox} accessibilityLiveRegion="polite">
+          <ActivityIndicator size="large" color={colors.patient} />
+          <Text style={styles.loadingTitle}>{t("facilities.loading")}</Text>
+          <Text style={styles.loadingHint}>{t("facilities.slowHint")}</Text>
+        </View>
+      ) : facilities === null ? null : list.length === 0 ? (
         <EmptyState
           title={t("facilities.emptyTitle")}
           body={t("facilities.emptyBody")}
           icon="local_hospital"
         />
       ) : (
-        visible.map((facility) => (
-          <FacilityCard key={facility.id} facility={facility} />
-        ))
+        <>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterRow}
+          >
+            {([ALL, ...kinds] as Filter[]).map((option) => {
+              const selected = option === filter;
+              const label =
+                option === ALL
+                  ? t("facilities.all", { count: list.length })
+                  : t(FILTER_LABEL[option], {
+                      count: list.filter((item) => item.kind === option).length,
+                    });
+              return (
+                <Pressable
+                  key={option}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                  onPress={() => setFilter(option)}
+                  style={[styles.filterPill, selected && styles.filterPillOn]}
+                >
+                  {option === ALL ? (
+                    <Icon
+                      name="verified"
+                      size={18}
+                      color={selected ? colors.onPatient : colors.text}
+                    />
+                  ) : null}
+                  <Text style={[styles.filterText, selected && styles.filterTextOn]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          {visible.map((facility) => (
+            <FacilityCard key={facility.id} facility={facility} />
+          ))}
+
+          {/* Required by the OpenStreetMap licence. */}
+          <Text style={styles.credit}>{t("facilities.osmCredit")}</Text>
+        </>
       )}
     </Screen>
   );
@@ -249,7 +330,6 @@ export default function NearbyFacilities() {
 
 const styles = StyleSheet.create({
   content: { gap: spacing.md },
-  pressed: { opacity: 0.9 },
 
   locationBanner: {
     backgroundColor: colors.surfaceContainerLow,
@@ -261,6 +341,30 @@ const styles = StyleSheet.create({
   locationText: { ...type.labelMd, color: colors.patient },
   bannerTitle: { ...type.headlineMd, color: colors.text },
   bannerBody: { ...type.bodyMd, color: colors.muted },
+
+  chooser: { gap: spacing.md },
+  chooserTitle: { ...type.headlineMd, color: colors.text },
+  or: { ...type.labelMd, color: colors.muted, textAlign: "center" },
+  cancelRow: { alignItems: "center" },
+
+  placeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.patientTint,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+  },
+  placeText: { ...type.bodyMd, color: colors.onPrimaryFixed, flex: 1 },
+
+  loadingBox: {
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.xl,
+  },
+  loadingTitle: { ...type.headlineMd, color: colors.text, textAlign: "center" },
+  loadingHint: { ...type.bodyMd, color: colors.muted, textAlign: "center" },
 
   filterRow: { gap: spacing.xs, paddingRight: spacing.md },
   filterPill: {
@@ -312,56 +416,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   distanceText: { ...type.bodyMd, color: colors.text, flex: 1 },
+  address: { ...type.bodyMd, color: colors.muted },
 
-  badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
-  stockBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    backgroundColor: colors.primaryContainer,
-    borderRadius: radius.pill,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  stockBadgeText: { ...type.labelMd, color: colors.onPrimaryContainer },
-  stockBadgeAlt: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    backgroundColor: colors.secondaryContainer,
-    borderRadius: radius.pill,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  stockBadgeAltText: { ...type.labelMd, color: colors.onSecondaryContainer },
-
-  groupLabel: {
-    ...type.labelMd,
-    color: colors.faint,
-    letterSpacing: 0.6,
-    marginTop: spacing.xs,
-  },
-  stockList: {
-    gap: spacing.xs,
-    backgroundColor: colors.surfaceContainerLow,
-    borderRadius: radius.md,
-    padding: spacing.sm,
-  },
-  stockRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  stockName: { flex: 1, ...type.bodyLg, color: colors.text },
-  stockNameOut: { color: colors.muted, textDecorationLine: "line-through" },
-  stockState: { ...type.labelMd },
-
-  updated: { ...type.labelMd, color: colors.faint, marginTop: spacing.xs },
-  expandButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.xs,
-    minHeight: 48,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceContainerHigh,
-  },
-  expandText: { ...type.labelLg, color: colors.patient },
-  noStock: { ...type.bodyMd, color: colors.faint },
+  credit: { ...type.labelMd, color: colors.faint, textAlign: "center" },
 });

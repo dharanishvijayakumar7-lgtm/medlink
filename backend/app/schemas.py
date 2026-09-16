@@ -73,6 +73,29 @@ class FacilityOut(FacilitySummary):
     stock: list[StockItemOut]
 
 
+class NearbyFacility(BaseModel):
+    """A real clinic or hospital near the patient, from OpenStreetMap
+    (see app/nearby.py). Not one of MedLink's own facilities."""
+
+    # "osm:node/123" - stable, but not a MedLink facility id.
+    id: str
+    name: str
+    kind: Literal["hospital", "clinic", "health_centre"]
+    distance_km: float
+    latitude: float
+    longitude: float
+    address: str | None = None
+
+
+class LocatedPlace(BaseModel):
+    """A place the patient typed, found on the map."""
+
+    latitude: float
+    longitude: float
+    # What was matched, e.g. "Karur, Tamil Nadu" - shown so a wrong match is obvious.
+    label: str
+
+
 # --- Facility dashboard -----------------------------------------------------
 
 

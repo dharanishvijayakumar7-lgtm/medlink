@@ -186,6 +186,26 @@ export type Facility = FacilitySummary & {
   stock: StockItem[];
 };
 
+/** A real clinic or hospital near the patient, from OpenStreetMap. */
+export type NearbyFacility = {
+  /** "osm:node/123" - not a MedLink facility id. */
+  id: string;
+  name: string;
+  kind: "hospital" | "clinic" | "health_centre";
+  distance_km: number;
+  latitude: number;
+  longitude: number;
+  address: string | null;
+};
+
+/** A place the patient typed, found on the map. */
+export type LocatedPlace = {
+  latitude: number;
+  longitude: number;
+  /** What was matched, e.g. "Karur, Tamil Nadu". */
+  label: string;
+};
+
 export type Doctor = {
   id: number;
   name: string;
@@ -590,6 +610,21 @@ export const api = {
 
   // Facilities and stock
   getFacilities: () => request<Facility[]>("/facilities"),
+
+  /**
+   * Clinics and hospitals within 25 km, nearest first. The first search for an
+   * area goes out to OpenStreetMap and can take a while.
+   */
+  getNearbyFacilities: (latitude: number, longitude: number) =>
+    request<NearbyFacility[]>(
+      `/facilities/nearby?lat=${latitude.toFixed(5)}&lng=${longitude.toFixed(5)}`,
+      undefined,
+      100_000,
+    ),
+
+  /** A typed village, town or PIN code in India. 404 when nothing matches. */
+  locatePlace: (query: string) =>
+    request<LocatedPlace>(`/facilities/locate?q=${encodeURIComponent(query)}`),
 
   getFacilityDashboard: (facilityId: number, days: number) =>
     request<FacilityDashboard>(

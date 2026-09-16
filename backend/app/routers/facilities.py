@@ -1,10 +1,12 @@
-"""Facility list, the stock a doctor maintains, and the facility dashboard."""
+"""Facility list, the stock a doctor maintains, the facility dashboard, and
+real clinics and hospitals near a patient."""
 
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, selectinload
 
+from app import nearby
 from app.database import get_db
 from app.models import (
     ConsultationNote,
@@ -19,6 +21,8 @@ from app.schemas import (
     FacilityDashboard,
     FacilityOut,
     FacilitySummary,
+    LocatedPlace,
+    NearbyFacility,
     PatientLoad,
     RateStat,
     StockItemOut,
@@ -56,6 +60,37 @@ def list_facilities(db: Session = Depends(get_db)) -> list[Facility]:
         .order_by(Facility.id)
         .all()
     )
+
+
+@router.get("/nearby", response_model=list[NearbyFacility])
+def nearby_facilities(
+    lat: float = Query(..., ge=-90, le=90),
+    lng: float = Query(..., ge=-180, le=180),
+) -> list[dict]:
+    """Real clinics and hospitals within 25 km of a point, nearest first, from
+    OpenStreetMap. For the patient's facility finder; doctors keep using the
+    MedLink facility list above."""
+    try:
+        return nearby.find_nearby(lat, lng)
+    except nearby.NearbyUnavailable as error:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Could not load nearby places right now.",
+        ) from error
+
+
+@router.get("/locate", response_model=LocatedPlace)
+def locate_place(q: str = Query(..., min_length=2, max_length=120)) -> dict:
+    """A village, town or PIN code in India, as a point for ``/nearby``."""
+    try:
+        place = nearby.locate(q)
+    except nearby.NearbyUnavailable as error:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "Place search is unavailable right now."
+        ) from error
+    if place is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Could not find that place.")
+    return place
 
 
 @router.get("/{facility_id}/dashboard", response_model=FacilityDashboard)
