@@ -113,7 +113,7 @@ export const colors = {
   /** Level 1 card surface. */
   card: palette.surfaceContainerLowest,
   /** Structural border that carries elevation instead of a shadow. */
-  border: "#DDE2E5",
+  border: "#E2E7EA",
   borderStrong: palette.outlineVariant,
   /** Resting 2px input border; focus switches to `patient`. */
   inputBorder: "#757575",
@@ -130,12 +130,16 @@ export const colors = {
   patient: palette.primaryContainer,
   patientDark: palette.primary,
   patientTint: palette.primaryFixed,
+  /** Quiet background for patient icon circles and selected rows. */
+  patientSoft: "#E3F3F6",
   onPatient: palette.onPrimary,
 
   /** Doctor mode accent. */
   doctor: palette.secondary,
   doctorDark: palette.onSecondaryFixed,
   doctorTint: palette.secondaryFixed,
+  /** Quiet background for doctor icon circles and selected rows. */
+  doctorSoft: "#E8EEF7",
   onDoctor: palette.onSecondary,
 
   /**
@@ -144,6 +148,7 @@ export const colors = {
    */
   warning: brand.warningAmber,
   warningTint: palette.tertiaryFixed,
+  warningSoft: "#FFF1EA",
   onWarning: "#ffffff",
 
   /** Life-threatening only. */
@@ -153,6 +158,7 @@ export const colors = {
 
   success: brand.successForest,
   successTint: "#d8f3dd",
+  successSoft: "#EAF7EC",
   onSuccess: "#ffffff",
 } as const;
 
@@ -161,6 +167,9 @@ export const colors = {
 // Noto Sans carries every script the app needs (Devanagari, Tamil, Telugu,
 // Bengali, Latin). Android ignores fontWeight on custom families, so each
 // style names its own file rather than relying on a weight.
+//
+// Sized for older eyes: body text is 18, and nothing is smaller than 16.
+// Indic scripts need the generous line heights for their marks.
 
 export const fonts = {
   regular: "NotoSans_400Regular",
@@ -188,16 +197,16 @@ export const type: Record<
   | "display",
   TextStyle
 > = {
-  headlineXl: { fontFamily: fonts.bold, fontSize: 32, lineHeight: 40 },
-  headlineXlMobile: { fontFamily: fonts.bold, fontSize: 26, lineHeight: 34 },
-  headlineLg: { fontFamily: fonts.bold, fontSize: 24, lineHeight: 32 },
-  headlineMd: { fontFamily: fonts.semibold, fontSize: 20, lineHeight: 28 },
-  bodyXl: { fontFamily: fonts.regular, fontSize: 18, lineHeight: 28 },
-  bodyLg: { fontFamily: fonts.regular, fontSize: 16, lineHeight: 24 },
-  bodyMd: { fontFamily: fonts.medium, fontSize: 16, lineHeight: 24 },
-  labelLg: { fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
+  headlineXl: { fontFamily: fonts.bold, fontSize: 32, lineHeight: 42 },
+  headlineXlMobile: { fontFamily: fonts.bold, fontSize: 28, lineHeight: 38 },
+  headlineLg: { fontFamily: fonts.bold, fontSize: 24, lineHeight: 34 },
+  headlineMd: { fontFamily: fonts.semibold, fontSize: 21, lineHeight: 30 },
+  bodyXl: { fontFamily: fonts.regular, fontSize: 20, lineHeight: 30 },
+  bodyLg: { fontFamily: fonts.regular, fontSize: 18, lineHeight: 28 },
+  bodyMd: { fontFamily: fonts.medium, fontSize: 18, lineHeight: 28 },
+  labelLg: { fontFamily: fonts.semibold, fontSize: 18, lineHeight: 26 },
   /** The absolute floor. Nothing in the system may be smaller. */
-  labelMd: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20 },
+  labelMd: { fontFamily: fonts.semibold, fontSize: 16, lineHeight: 24 },
   /**
    * Not in DESIGN.md's scale - added for one job: the emergency number on the
    * SOS screen, which has to be readable at arm's length while dialling.
@@ -234,7 +243,7 @@ export const spacing = {
   lg: 24,
   xl: 32,
   /** Outer page margin on mobile. */
-  margin: 16,
+  margin: 20,
   marginTablet: 24,
   gutter: 16,
   gutterMobile: 12,
@@ -243,14 +252,14 @@ export const spacing = {
 // --- Radius -----------------------------------------------------------------
 
 export const radius = {
-  sm: 4,
-  /** Standard structural envelope: controls, inputs, diagnostic cards. */
-  md: 8,
-  /** Cards and banners. */
-  lg: 12,
+  sm: 6,
+  /** Controls, inputs and buttons. */
+  md: 14,
+  /** Cards and banners - soft, friendly corners. */
+  lg: 20,
   /** Patient-mode icon tiles - tactile physical stamp surfaces. */
-  tile: 16,
-  xl: 24,
+  tile: 18,
+  xl: 28,
   /** Status chips and filter toggles ONLY - never content containers. */
   pill: 9999,
 } as const;
@@ -263,15 +272,15 @@ export const touch = {
   /** Doctor clinical action. */
   doctorAction: 48,
   /** Primary patient action and form inputs. */
-  patientAction: 56,
+  patientAction: 60,
   /** Emergency SOS trigger - damp hands, tremors, field conditions. */
   sos: 64,
   /** "Grandmother tile" minimum height. */
   tile: 112,
   /** Doctor patient-row card. */
   row: 72,
-  /** Triage status chip. */
-  chip: 36,
+  /** Triage status chip and filter toggle. */
+  chip: 44,
 } as const;
 
 // --- Elevation --------------------------------------------------------------
@@ -285,7 +294,7 @@ export const elevation = {
   /** Level 1: cards, modules, input containers. */
   level1: {
     backgroundColor: colors.card,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: colors.border,
   },
   /** Level 1, active clinician card. */

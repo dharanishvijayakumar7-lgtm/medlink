@@ -143,7 +143,7 @@ function TriageDetail({ triage }: { triage: TriageEntry }) {
         />
       ) : null}
       {triage.answers.map((answer, index) => (
-        <DetailLine key={index} label={answer.question.toUpperCase()} value={answer.answer} />
+        <DetailLine key={index} label={answer.question} value={answer.answer} />
       ))}
     </>
   );
@@ -215,7 +215,7 @@ function TimelineRow({ entry, isLast }: { entry: TimelineEntry; isLast: boolean 
       <View style={styles.entry}>
         <View style={styles.dateRow}>
           <Text style={styles.date}>
-            {formatIsoDate(entry.date).toUpperCase()}
+            {formatIsoDate(entry.date)}
             {entry.date_is_estimated ? ` (${t("timeline.uploadDate")})` : ""}
           </Text>
           {entry.age_at_date_label ? (
@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.sm,
   },
-  date: { ...type.labelLg, color: colors.text, letterSpacing: 0.4 },
+  date: { ...type.labelLg, color: colors.text },
   agePill: {
     backgroundColor: colors.doctor,
     borderRadius: radius.pill,
@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
   },
   ageText: { ...type.labelMd, color: colors.onDoctor },
   chips: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: spacing.sm },
-  kind: { ...type.labelMd, color: colors.muted, letterSpacing: 0.6 },
+  kind: { ...type.labelMd, color: colors.muted },
   title: { ...type.bodyLg, color: colors.text },
 
   details: {
@@ -363,7 +363,7 @@ const styles = StyleSheet.create({
   },
   detailBody: { ...type.bodyLg, color: colors.text },
   detailLine: { gap: 2 },
-  detailLabel: { ...type.labelMd, color: colors.faint, letterSpacing: 0.4 },
+  detailLabel: { ...type.labelMd, color: colors.muted },
   detailValue: { ...type.bodyMd, color: colors.text },
 
   toggle: {

@@ -3,9 +3,16 @@ import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { Icon } from "@/components/icon";
 import { PastDateField } from "@/components/past-date-field";
-import { Button, Card, ErrorBanner, Screen, TextField } from "@/components/ui";
+import {
+  Button,
+  Card,
+  ErrorBanner,
+  IconCircle,
+  InfoNote,
+  Screen,
+  TextField,
+} from "@/components/ui";
 import { api, PickedPdf } from "@/lib/api";
 import { formatFileSize } from "@/lib/format";
 import { useT } from "@/lib/i18n";
@@ -32,8 +39,10 @@ export default function UploadDocument() {
     setError(null);
     const result = await DocumentPicker.getDocumentAsync({
       type: "application/pdf",
-      // A cache copy gives a file:// URI that FormData can upload reliably.
-      copyToCacheDirectory: true,
+      // No cache copy: the picker's content:// URI is what expo-file-system
+      // may read. In Expo Go the copy lands outside the folders it is allowed
+      // to read, and the upload fails with "Missing 'READ' permission".
+      copyToCacheDirectory: false,
       multiple: false,
     });
     if (result.canceled) return;
@@ -68,24 +77,26 @@ export default function UploadDocument() {
   }
 
   return (
-    <Screen>
-      <Card>
-        <View style={styles.introRow}>
-          <View style={styles.introIcon}>
-            <Icon name="upload_file" size={28} color={colors.patient} />
-          </View>
-          <View style={styles.introBody}>
-            <Text style={styles.introTitle}>{t("upload.introTitle")}</Text>
-            <Text style={styles.introText}>{t("upload.introText")}</Text>
-          </View>
-        </View>
-      </Card>
-
-      {error ? <ErrorBanner message={error} /> : null}
+    <Screen
+      footer={
+        <>
+          {error ? <ErrorBanner message={error} /> : null}
+          <Button
+            title={t("upload.submit")}
+            icon="cloud_upload"
+            onPress={submit}
+            loading={uploading}
+            disabled={!file}
+            tone="patient"
+          />
+        </>
+      }
+    >
+      <Text style={styles.intro}>{t("upload.introText")}</Text>
 
       {file ? (
         <View style={styles.fileCard}>
-          <Icon name="picture_as_pdf" size={32} color={colors.patient} />
+          <IconCircle icon="picture_as_pdf" size={52} />
           <View style={styles.fileBody}>
             <Text style={styles.fileName} numberOfLines={2}>
               {file.name}
@@ -94,22 +105,27 @@ export default function UploadDocument() {
               <Text style={styles.fileMeta}>{formatFileSize(file.size)}</Text>
             ) : null}
           </View>
-          <Pressable accessibilityRole="button" onPress={pickFile} hitSlop={12}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={pickFile}
+            hitSlop={12}
+            style={styles.changeButton}
+          >
             <Text style={styles.change}>{t("upload.change")}</Text>
           </Pressable>
         </View>
       ) : (
-        <Button
-          title={t("upload.choose")}
-          icon="picture_as_pdf"
+        <Pressable
+          accessibilityRole="button"
           onPress={pickFile}
-          tone="patient"
-          variant="outline"
-        />
+          style={({ pressed }) => [styles.pickTile, pressed && styles.pressed]}
+        >
+          <IconCircle icon="upload_file" size={72} />
+          <Text style={styles.pickTitle}>{t("upload.choose")}</Text>
+        </Pressable>
       )}
 
       <Card style={styles.formCard}>
-        <Text style={styles.optionalNote}>{t("upload.optionalNote")}</Text>
         <TextField
           label={t("upload.hospital")}
           requirement={t("common.optional")}
@@ -130,42 +146,34 @@ export default function UploadDocument() {
         />
       </Card>
 
-      <View style={styles.timingNote}>
-        <Icon name="schedule" size={20} color={colors.muted} />
-        <Text style={styles.timingText}>{t("upload.timing")}</Text>
-      </View>
-
-      <Button
-        title={t("upload.submit")}
-        icon="cloud_upload"
-        onPress={submit}
-        loading={uploading}
-        disabled={!file}
-        tone="patient"
-      />
+      <InfoNote icon="schedule" text={t("upload.timing")} />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  introRow: { flexDirection: "row", gap: spacing.sm },
-  introIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.pill,
-    backgroundColor: colors.patientTint,
+  pressed: { backgroundColor: colors.patientSoft },
+  intro: { ...type.bodyLg, color: colors.muted },
+
+  pickTile: {
     alignItems: "center",
     justifyContent: "center",
+    gap: spacing.sm,
+    minHeight: 180,
+    borderRadius: radius.lg,
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderColor: colors.patient,
+    backgroundColor: colors.card,
+    padding: spacing.lg,
   },
-  introBody: { flex: 1, gap: spacing.xs },
-  introTitle: { ...type.headlineMd, color: colors.text },
-  introText: { ...type.bodyMd, color: colors.muted },
+  pickTitle: { ...type.headlineMd, color: colors.patient, textAlign: "center" },
 
   fileCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
-    backgroundColor: colors.patientTint,
+    gap: spacing.md,
+    backgroundColor: colors.patientSoft,
     borderRadius: radius.lg,
     borderWidth: 2,
     borderColor: colors.patient,
@@ -174,11 +182,8 @@ const styles = StyleSheet.create({
   fileBody: { flex: 1, minWidth: 0 },
   fileName: { ...type.labelLg, color: colors.text },
   fileMeta: { ...type.labelMd, color: colors.muted },
+  changeButton: { minHeight: 44, justifyContent: "center" },
   change: { ...type.labelLg, color: colors.patient },
 
   formCard: { gap: spacing.md },
-  optionalNote: { ...type.bodyMd, color: colors.muted },
-
-  timingNote: { flexDirection: "row", gap: spacing.xs, paddingHorizontal: spacing.xs },
-  timingText: { ...type.bodyMd, color: colors.muted, flex: 1 },
 });

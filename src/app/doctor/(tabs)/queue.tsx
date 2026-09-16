@@ -1,5 +1,5 @@
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 // Gesture-handler's Pressable hit-tests natively. React Native's measures the
 // button on screen, and after Search ID > record > back that measurement comes
@@ -33,13 +33,6 @@ const FILTER_LABEL: Record<string, TranslationKey> = {
   Done: "status.done",
 };
 
-const NAV_ACTIONS: { label: TranslationKey; icon: string; href: string }[] = [
-  { label: "queue.navHighRisk", icon: "warning", href: "/doctor/high-risk" },
-  { label: "queue.navSearch", icon: "search", href: "/doctor/search" },
-  { label: "queue.navStock", icon: "inventory_2", href: "/doctor/stock" },
-  { label: "queue.navDashboard", icon: "monitoring", href: "/doctor/dashboard" },
-];
-
 function Metric({ label, value, accent }: { label: string; value: string; accent: string }) {
   return (
     <View style={styles.metric}>
@@ -60,11 +53,6 @@ export default function DoctorQueue() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>(ALL);
   const [busyEntry, setBusyEntry] = useState<number | null>(null);
-
-  // The doctor session is in-memory, so a reload drops it - send them back.
-  useEffect(() => {
-    if (!doctor) router.replace("/doctor");
-  }, [doctor, router]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -127,39 +115,16 @@ export default function DoctorQueue() {
 
   return (
     <Screen refreshing={loading} onRefresh={load}>
-      <View style={styles.statusRow}>
-        <View style={styles.facilityPill}>
-          <View style={styles.liveDot} />
-          <Text style={styles.facilityText} numberOfLines={1}>
-            {doctor.facility ? doctor.facility.name : t("queue.teleClinic")}
-          </Text>
-        </View>
-        <View style={styles.liveRow}>
-          <Icon name="sync" size={16} color={colors.muted} />
-          <Text style={styles.liveText}>{t("queue.live")}</Text>
-        </View>
-      </View>
-
-      {/* Triage desk hero */}
+      {/* Today at a glance */}
       <View style={styles.hero}>
+        <Text style={styles.heroDoctor} numberOfLines={1}>
+          {t("common.doctorName", { name: doctor.name })} ·{" "}
+          {doctor.facility ? doctor.facility.name : t("queue.teleClinic")}
+        </Text>
         <View style={styles.heroTop}>
-          <View style={styles.heroHeading}>
-            <View style={styles.heroLabelRow}>
-              <Text style={styles.heroLabel}>{t("queue.triageDesk")}</Text>
-              <View style={styles.heroDoctorPill}>
-                <Text style={styles.heroDoctorText} numberOfLines={1}>
-                  {t("common.doctorName", { name: doctor.name })}
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.heroTitle}>{t("queue.title")}</Text>
-          </View>
-          <View style={styles.heroCount}>
-            <Text style={styles.heroCountValue}>{counts.waiting}</Text>
-            <Text style={styles.heroCountLabel}>{t("queue.inWaiting")}</Text>
-          </View>
+          <Text style={styles.heroCountValue}>{counts.waiting}</Text>
+          <Text style={styles.heroCountLabel}>{t("queue.inWaiting")}</Text>
         </View>
-
         <View style={styles.metricStrip}>
           <Metric
             label={t("queue.metricHighRisk")}
@@ -177,26 +142,6 @@ export default function DoctorQueue() {
             accent={colors.primaryFixed}
           />
         </View>
-      </View>
-
-      {/* Clinical navigation */}
-      <View style={styles.navRow}>
-        {NAV_ACTIONS.map((action) => (
-          <Pressable
-            key={action.href}
-            accessibilityRole="button"
-            // TEMP DEBUG: confirms the tap now completes.
-            onPressIn={() => console.log("[debug] pressIn", action.label)}
-            onPress={() => {
-              console.log("[debug] press", action.label);
-              router.push(action.href as never);
-            }}
-            style={({ pressed }) => [styles.navAction, pressed && styles.pressed]}
-          >
-            <Icon name={action.icon} size={22} color={colors.doctor} />
-            <Text style={styles.navActionText}>{t(action.label)}</Text>
-          </Pressable>
-        ))}
       </View>
 
       {error ? <ErrorBanner message={error} onRetry={load} /> : null}
@@ -296,54 +241,16 @@ export default function DoctorQueue() {
 const styles = StyleSheet.create({
   pressed: { opacity: 0.9 },
 
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.sm,
-  },
-  facilityPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    flexShrink: 1,
-    backgroundColor: colors.surfaceContainerHigh,
-    borderRadius: radius.pill,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-  },
-  liveDot: {
-    width: 8,
-    height: 8,
-    borderRadius: radius.pill,
-    backgroundColor: colors.patient,
-  },
-  facilityText: { ...type.labelMd, color: colors.muted, flexShrink: 1 },
-  liveRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  liveText: { ...type.labelMd, color: colors.muted },
-
   hero: {
     backgroundColor: colors.doctor,
     borderRadius: radius.lg,
     padding: spacing.md,
-    gap: spacing.md,
+    gap: spacing.sm,
   },
-  heroTop: { flexDirection: "row", justifyContent: "space-between", gap: spacing.sm },
-  heroHeading: { flex: 1, minWidth: 0, gap: spacing.xs },
-  heroLabelRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  heroLabel: { ...type.labelMd, color: colors.primaryFixed, letterSpacing: 1 },
-  heroDoctorPill: {
-    flexShrink: 1,
-    backgroundColor: colors.secondaryFixed,
-    borderRadius: radius.pill,
-    paddingVertical: 2,
-    paddingHorizontal: spacing.sm,
-  },
-  heroDoctorText: { ...type.labelMd, color: colors.onSecondaryFixed },
-  heroTitle: { ...type.headlineLg, color: colors.onDoctor },
-  heroCount: { alignItems: "flex-end" },
-  heroCountValue: { ...type.headlineXl, color: colors.primaryFixed },
-  heroCountLabel: { ...type.labelMd, color: colors.secondaryFixed },
+  heroDoctor: { ...type.labelMd, color: colors.secondaryFixed },
+  heroTop: { flexDirection: "row", alignItems: "baseline", gap: spacing.sm },
+  heroCountValue: { ...type.headlineXl, fontSize: 44, lineHeight: 52, color: colors.onDoctor },
+  heroCountLabel: { ...type.headlineMd, color: colors.onDoctor, flex: 1 },
 
   metricStrip: {
     flexDirection: "row",
@@ -355,21 +262,6 @@ const styles = StyleSheet.create({
   metric: { flex: 1, gap: 2 },
   metricLabel: { ...type.labelMd, color: colors.secondaryFixedDim },
   metricValue: { ...type.headlineMd },
-
-  navRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  navAction: {
-    flexGrow: 1,
-    flexBasis: "45%",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.xs,
-    minHeight: touch.doctorAction,
-    borderRadius: radius.md,
-    borderWidth: 2,
-    borderColor: colors.doctor,
-  },
-  navActionText: { ...type.labelLg, color: colors.doctor },
 
   noticeBar: {
     flexDirection: "row",

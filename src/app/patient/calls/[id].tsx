@@ -4,7 +4,7 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { DocumentDisclaimer } from "@/components/document-disclaimer";
 import { Icon } from "@/components/icon";
-import { Badge, Button, ErrorBanner, Loading, Screen } from "@/components/ui";
+import { Badge, Button, ErrorBanner, IconCircle, Loading, Screen } from "@/components/ui";
 import { api, CallSummary } from "@/lib/api";
 import {
   answerLabel,
@@ -32,7 +32,7 @@ function Section({
   return (
     <View style={styles.section}>
       <View style={styles.sectionHead}>
-        <Icon name={icon} size={22} color={colors.patient} />
+        <IconCircle icon={icon} size={40} />
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
       {children}
@@ -134,9 +134,7 @@ export default function CallDetail() {
       {error ? <ErrorBanner message={error} onRetry={fetchCall} /> : null}
 
       <View style={styles.headerCard}>
-        <View style={styles.callIcon}>
-          <Icon name="phone_in_talk" size={28} color={colors.patient} />
-        </View>
+        <IconCircle icon="phone_in_talk" size={52} />
         <View style={styles.headerBody}>
           <Text style={styles.headerTitle}>
             {shownTitle || t("callDetail.fallbackTitle")}
@@ -259,27 +257,19 @@ const styles = StyleSheet.create({
   headerCard: {
     ...elevation.level1,
     flexDirection: "row",
-    gap: spacing.sm,
+    gap: spacing.md,
     borderRadius: radius.lg,
     padding: spacing.md,
   },
-  callIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.tile,
-    backgroundColor: colors.patientTint,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   headerBody: { flex: 1, minWidth: 0, gap: spacing.xs },
   headerTitle: { ...type.headlineMd, color: colors.text },
-  meta: { ...type.bodyMd, color: colors.muted },
+  meta: { ...type.bodyLg, fontSize: 16, lineHeight: 24, color: colors.muted },
 
   emergency: {
     gap: spacing.sm,
     backgroundColor: colors.emergencyTint,
     borderRadius: radius.lg,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: colors.emergency,
     padding: spacing.md,
   },
@@ -288,9 +278,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    backgroundColor: colors.warningTint,
+    backgroundColor: colors.warningSoft,
     borderRadius: radius.lg,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: colors.warning,
     padding: spacing.md,
   },
@@ -302,13 +292,13 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.sm,
   },
-  sectionHead: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  sectionTitle: { ...type.labelLg, color: colors.text, flex: 1 },
+  sectionHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  sectionTitle: { ...type.headlineMd, color: colors.text, flex: 1 },
   body: { ...type.bodyLg, color: colors.text },
 
   answerRow: {
     borderLeftWidth: 3,
-    borderLeftColor: colors.patientTint,
+    borderLeftColor: colors.patient,
     paddingLeft: spacing.sm,
     gap: 2,
   },
@@ -335,7 +325,7 @@ const styles = StyleSheet.create({
   note: { ...type.labelMd, color: colors.muted },
 
   causes: {
-    backgroundColor: colors.warningTint,
+    backgroundColor: colors.warningSoft,
     borderRadius: radius.md,
     padding: spacing.sm,
     gap: spacing.xs,

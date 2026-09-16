@@ -7,6 +7,7 @@
  */
 
 import Constants from "expo-constants";
+import { File as FsFile } from "expo-file-system";
 
 import { translate } from "@/lib/i18n";
 
@@ -48,12 +49,14 @@ async function request<T>(
         ...init?.headers,
       },
     });
-  } catch {
-    throw new Error(
-      translate(controller.signal.aborted ? "error.timeout" : "error.unreachable", {
-        url: API_BASE_URL,
-      }),
+  } catch (caught) {
+    const message = translate(
+      controller.signal.aborted ? "error.timeout" : "error.unreachable",
     );
+    // The server address and the underlying error only help whoever runs the
+    // server; to a patient every failed request reads the same.
+    const detail = caught instanceof Error ? `\n${caught.message}` : "";
+    throw new Error(__DEV__ ? `${message}\n${API_BASE_URL}${detail}` : message);
   } finally {
     clearTimeout(timer);
   }
@@ -173,8 +176,27 @@ export type Doctor = {
   id: number;
   name: string;
   specialization: string;
+  /** The sign-in number. Null only for doctor rows from before sign-in. */
+  phone: string | null;
   created_at: string;
   facility: FacilitySummary | null;
+};
+
+/** One patient on a (possibly shared) number, for the profile picker. */
+export type PatientChoice = {
+  unique_code: string;
+  name: string;
+  gender: string;
+  age_label: string | null;
+};
+
+/** Who a mobile number belongs to. A number is never both roles. */
+export type SignInLookup = {
+  /** The normalised 10-digit number. */
+  phone: string;
+  role: "patient" | "doctor" | null;
+  patients: PatientChoice[];
+  doctor: Doctor | null;
 };
 
 export type ConsultationNote = {
@@ -429,6 +451,9 @@ export type PickedPdf = { uri: string; name: string; mimeType?: string | null };
 const code = (value: string) => encodeURIComponent(value);
 
 export const api = {
+  // Sign-in (mobile number, no OTP yet)
+  lookupPhone: (phone: string) => post<SignInLookup>("/sign-in/lookup", { phone }),
+
   // Patients
   createPatient: (draft: PatientDraft) => post<Patient>("/patients", draft),
 
@@ -454,12 +479,12 @@ export const api = {
     extras: { hospital_name?: string; visit_date?: string },
   ) => {
     const form = new FormData();
-    // React Native's FormData takes a { uri, name, type } descriptor for files.
-    form.append("file", {
-      uri: file.uri,
-      name: file.name || "document.pdf",
-      type: file.mimeType || "application/pdf",
-    } as unknown as Blob);
+    // The global fetch here is Expo's, which cannot send React Native's
+    // { uri, name, type } descriptor - it throws before any request is made.
+    // It reads an expo-file-system File instead (a content:// URI here).
+    form.append("file", new FsFile(file.uri) as unknown as Blob);
+    // The file's own name may be an opaque id; send the one the patient saw.
+    if (file.name) form.append("original_filename", file.name);
     if (extras.hospital_name?.trim()) {
       form.append("hospital_name", extras.hospital_name.trim());
     }
@@ -523,6 +548,7 @@ export const api = {
   createDoctor: (draft: {
     name: string;
     specialization: string;
+    phone: string;
     facility_id?: number | null;
   }) => post<Doctor>("/doctors", draft),
 

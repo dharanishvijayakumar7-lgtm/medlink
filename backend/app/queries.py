@@ -1,6 +1,7 @@
 """Database helpers shared by more than one router."""
 
 import secrets
+from typing import Literal
 
 from fastapi import HTTPException, status as http_status
 from sqlalchemy import func
@@ -39,14 +40,49 @@ def normalise_phone(raw: str) -> str:
     return digits[-10:] if len(digits) > 10 else digits
 
 
+def is_mobile(phone: str) -> bool:
+    """True for a normalised Indian mobile number: 10 digits starting 6-9."""
+    return len(phone) == 10 and phone.isdigit() and phone[0] in "6789"
+
+
+def phone_role(db: Session, phone: str) -> Literal["patient", "doctor"] | None:
+    """Who a normalised number belongs to. A number is never both."""
+    if db.query(Doctor.id).filter(Doctor.phone == phone).first():
+        return "doctor"
+    if db.query(Patient.id).filter(Patient.phone == phone).first():
+        return "patient"
+    return None
+
+
+def ensure_phone_free(db: Session, phone: str, for_role: Literal["patient", "doctor"]) -> None:
+    """Refuse a number that is already used by the other role.
+
+    Several patients may share one number (a family handset), but a doctor's
+    number is theirs alone and a patient's number can never become a doctor's.
+    """
+    owner = phone_role(db, phone)
+    if owner == "doctor":
+        raise HTTPException(
+            http_status.HTTP_409_CONFLICT,
+            "This number is registered as a doctor. Use a different number.",
+        )
+    if owner == "patient" and for_role == "doctor":
+        raise HTTPException(
+            http_status.HTTP_409_CONFLICT,
+            "This number is registered as a patient. Use a different number.",
+        )
+
+
 def create_patient(db: Session, **fields) -> Patient:
     """Insert a patient with a freshly allocated, unique MedLink ID.
 
     Used by app registration and by the voice agent's phone handoff, so the
-    collision retry and phone normalisation live in one place.
+    collision retry, phone normalisation and the patient/doctor number rule
+    live in one place.
     """
     if "phone" in fields:
         fields["phone"] = normalise_phone(fields["phone"])
+        ensure_phone_free(db, fields["phone"], "patient")
 
     for _ in range(CODE_ATTEMPTS):
         patient = Patient(unique_code=new_patient_code(), **fields)

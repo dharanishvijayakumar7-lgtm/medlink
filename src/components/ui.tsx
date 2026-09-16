@@ -25,6 +25,7 @@ import {
   View,
   ViewStyle,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/icon";
 import { useT } from "@/lib/i18n";
@@ -38,19 +39,41 @@ export type Tone =
   | "success"
   | "neutral";
 
-const TONES: Record<Tone, { base: string; tint: string; on: string }> = {
-  patient: { base: colors.patient, tint: colors.patientTint, on: colors.onPatient },
-  doctor: { base: colors.doctor, tint: colors.doctorTint, on: colors.onDoctor },
-  warning: { base: colors.warning, tint: colors.warningTint, on: colors.onWarning },
+const TONES: Record<Tone, { base: string; tint: string; soft: string; on: string }> = {
+  patient: {
+    base: colors.patient,
+    tint: colors.patientTint,
+    soft: colors.patientSoft,
+    on: colors.onPatient,
+  },
+  doctor: {
+    base: colors.doctor,
+    tint: colors.doctorTint,
+    soft: colors.doctorSoft,
+    on: colors.onDoctor,
+  },
+  warning: {
+    base: colors.warning,
+    tint: colors.warningTint,
+    soft: colors.warningSoft,
+    on: colors.onWarning,
+  },
   emergency: {
     base: colors.emergency,
     tint: colors.emergencyTint,
+    soft: colors.emergencyTint,
     on: colors.onEmergency,
   },
-  success: { base: colors.success, tint: colors.successTint, on: colors.onSuccess },
+  success: {
+    base: colors.success,
+    tint: colors.successTint,
+    soft: colors.successSoft,
+    on: colors.onSuccess,
+  },
   neutral: {
     base: colors.muted,
     tint: colors.surfaceContainerHigh,
+    soft: colors.surfaceContainer,
     on: colors.inverseOnSurface,
   },
 };
@@ -67,6 +90,13 @@ type ScreenProps = {
   refreshing?: boolean;
   onRefresh?: () => void;
   contentStyle?: StyleProp<ViewStyle>;
+  /**
+   * The screen's main action, pinned to the bottom so it is always in the
+   * same place and never scrolls out of reach.
+   */
+  footer?: ReactNode;
+  /** Pad for the status bar, for screens that have no header above them. */
+  safeTop?: boolean;
 };
 
 export function Screen({
@@ -75,32 +105,47 @@ export function Screen({
   refreshing,
   onRefresh,
   contentStyle,
+  footer,
+  safeTop = false,
 }: ScreenProps) {
-  if (!scroll) {
-    return (
-      <View style={[styles.screen, styles.screenPadding, contentStyle]}>
-        {children}
-      </View>
-    );
-  }
+  const insets = useSafeAreaInsets();
+  const top = safeTop ? { paddingTop: insets.top + spacing.md } : null;
+
+  const body = scroll ? (
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[styles.screenPadding, top, contentStyle]}
+      keyboardShouldPersistTaps="handled"
+      refreshControl={
+        onRefresh ? (
+          <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} />
+        ) : undefined
+      }
+    >
+      {children}
+    </ScrollView>
+  ) : (
+    <View style={[styles.screen, styles.screenPadding, top, contentStyle]}>
+      {children}
+    </View>
+  );
 
   return (
     <KeyboardAvoidingView
       style={styles.screen}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <ScrollView
-        style={styles.screen}
-        contentContainerStyle={[styles.screenPadding, contentStyle]}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          onRefresh ? (
-            <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} />
-          ) : undefined
-        }
-      >
-        {children}
-      </ScrollView>
+      {body}
+      {footer ? (
+        <View
+          style={[
+            styles.footer,
+            { paddingBottom: Math.max(insets.bottom, spacing.sm) + spacing.sm },
+          ]}
+        >
+          {footer}
+        </View>
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
@@ -129,7 +174,123 @@ export function Card({
 }
 
 export function SectionTitle({ children }: { children: ReactNode }) {
-  return <Text style={styles.sectionTitle}>{children}</Text>;
+  return (
+    <Text style={styles.sectionTitle} accessibilityRole="header">
+      {children}
+    </Text>
+  );
+}
+
+/** A coloured circle holding an icon - the app's one icon container. */
+export function IconCircle({
+  icon,
+  tone = "patient",
+  size = 52,
+  solid = false,
+}: {
+  icon: string;
+  tone?: Tone;
+  size?: number;
+  /** Filled with the tone colour instead of its soft tint. */
+  solid?: boolean;
+}) {
+  const { base, soft, on } = TONES[tone];
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: solid ? base : soft,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Icon name={icon} size={Math.round(size * 0.52)} color={solid ? on : base} />
+    </View>
+  );
+}
+
+/**
+ * A tappable row: icon, title, an optional one-line subtitle and a chevron.
+ * The standard way to list places to go.
+ */
+export function ListRow({
+  icon,
+  title,
+  subtitle,
+  onPress,
+  tone = "patient",
+  right,
+}: {
+  icon: string;
+  title: string;
+  subtitle?: string | null;
+  onPress: () => void;
+  tone?: Tone;
+  /** Replaces the chevron, e.g. with a badge. */
+  right?: ReactNode;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.listRow, pressed && styles.rowPressed]}
+    >
+      <IconCircle icon={icon} tone={tone} />
+      <View style={styles.listRowBody}>
+        <Text style={styles.listRowTitle}>{title}</Text>
+        {subtitle ? <Text style={styles.listRowSubtitle}>{subtitle}</Text> : null}
+      </View>
+      {right ?? <Icon name="chevron_right" size={28} color={colors.faint} />}
+    </Pressable>
+  );
+}
+
+/** A tile for the two-up grids on home screens. */
+export function ActionTile({
+  icon,
+  title,
+  subtitle,
+  onPress,
+  tone = "patient",
+}: {
+  icon: string;
+  title: string;
+  subtitle?: string;
+  onPress: () => void;
+  tone?: Tone;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.tile, pressed && styles.rowPressed]}
+    >
+      <IconCircle icon={icon} tone={tone} size={56} />
+      <Text style={styles.tileTitle}>{title}</Text>
+      {subtitle ? <Text style={styles.tileSubtitle}>{subtitle}</Text> : null}
+    </Pressable>
+  );
+}
+
+/** One calm line of context. Replaces heavy banners for non-urgent notes. */
+export function InfoNote({
+  text,
+  icon = "info",
+  tone = "neutral",
+}: {
+  text: string;
+  icon?: string;
+  tone?: Tone;
+}) {
+  const { base, soft } = TONES[tone];
+  return (
+    <View style={[styles.infoNote, { backgroundColor: soft }]}>
+      <Icon name={icon} size={22} color={base} />
+      <Text style={styles.infoNoteText}>{text}</Text>
+    </View>
+  );
 }
 
 /** Screen header: icon beside a headline, as every mockup opens. */
@@ -168,7 +329,7 @@ type ButtonProps = {
   style?: StyleProp<ViewStyle>;
 };
 
-/** Height follows the tone: patient 56, doctor 48, emergency 64. */
+/** Height follows the tone: patient 60, doctor 48, emergency 64. */
 function heightFor(tone: Tone): number {
   if (tone === "emergency") return touch.sos;
   if (tone === "doctor") return touch.doctorAction;
@@ -210,7 +371,7 @@ export function Button({
         <ActivityIndicator color={label} />
       ) : (
         <>
-          {icon ? <Icon name={icon} size={22} color={label} /> : null}
+          {icon ? <Icon name={icon} size={24} color={label} /> : null}
           <Text style={[styles.buttonText, { color: label }]}>{title}</Text>
         </>
       )}
@@ -559,6 +720,14 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xl,
     gap: spacing.md,
   },
+  footer: {
+    paddingHorizontal: spacing.margin,
+    paddingTop: spacing.md,
+    gap: spacing.sm,
+    backgroundColor: colors.bg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
 
   card: {
     borderRadius: radius.lg,
@@ -566,10 +735,45 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   sectionTitle: {
-    ...type.labelLg,
+    ...type.headlineMd,
     color: colors.text,
     marginTop: spacing.sm,
   },
+
+  listRow: {
+    ...elevation.level1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    minHeight: 80,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  rowPressed: { backgroundColor: colors.surfaceContainerLow },
+  listRowBody: { flex: 1, minWidth: 0, gap: 2 },
+  listRowTitle: { ...type.labelLg, color: colors.text },
+  listRowSubtitle: { ...type.bodyLg, fontSize: 16, lineHeight: 24, color: colors.muted },
+
+  tile: {
+    ...elevation.level1,
+    flex: 1,
+    minHeight: 150,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  tileTitle: { ...type.labelLg, color: colors.text, marginTop: spacing.xs },
+  tileSubtitle: { ...type.bodyLg, fontSize: 16, lineHeight: 24, color: colors.muted },
+
+  infoNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+  },
+  infoNoteText: { ...type.bodyLg, fontSize: 16, lineHeight: 24, color: colors.text, flex: 1 },
 
   header: { gap: spacing.xs },
   headerRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
@@ -586,7 +790,12 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.85 },
   disabled: { opacity: 0.45 },
-  buttonText: { ...type.bodyXl, fontFamily: type.labelLg.fontFamily },
+  buttonText: {
+    ...type.labelLg,
+    fontSize: 19,
+    textAlign: "center",
+    flexShrink: 1,
+  },
   linkButton: { ...type.labelLg, paddingVertical: spacing.xs },
 
   field: { gap: spacing.xs },
@@ -662,9 +871,9 @@ const styles = StyleSheet.create({
   errorBanner: {
     flexDirection: "row",
     gap: spacing.sm,
-    backgroundColor: colors.warningTint,
+    backgroundColor: colors.warningSoft,
     borderRadius: radius.md,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: colors.warning,
     padding: spacing.md,
   },

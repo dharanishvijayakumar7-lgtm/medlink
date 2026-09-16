@@ -7,7 +7,7 @@ rooms, tracked referrals, facility stock, the voice-agent phone handoff,
 medical records patients upload from other hospitals, and each patient's call
 history from the voice agent.
 
-There is deliberately no authentication yet.
+Patients and doctors sign in with a mobile number; there is no OTP yet.
 """
 
 import logging
@@ -29,6 +29,7 @@ from app.routers import (
     notes,
     patients,
     referrals,
+    sign_in,
     translate,
     triage,
 )
@@ -87,6 +88,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(sign_in.router)
 app.include_router(patients.router)
 app.include_router(doctors.router)
 app.include_router(triage.router)

@@ -3,11 +3,18 @@ import { useCallback, useMemo, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Icon } from "@/components/icon";
-import { EmptyState, ErrorBanner, Loading, Screen } from "@/components/ui";
+import {
+  EmptyState,
+  ErrorBanner,
+  IconCircle,
+  InfoNote,
+  Loading,
+  Screen,
+} from "@/components/ui";
 import { api, Facility, StockItem } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { translate, useT } from "@/lib/i18n";
-import { colors, elevation, radius, spacing, type } from "@/lib/theme";
+import { colors, elevation, radius, spacing, touch, type } from "@/lib/theme";
 
 const ALL = "All";
 
@@ -23,12 +30,12 @@ function StockList({ items }: { items: StockItem[] }) {
         <View key={item.id} style={styles.stockRow}>
           <Icon
             name={item.available ? "check_circle" : "cancel"}
-            size={18}
+            size={22}
             color={item.available ? colors.success : colors.warning}
           />
           <Text
             style={[styles.stockName, !item.available && styles.stockNameOut]}
-            numberOfLines={1}
+            numberOfLines={2}
           >
             {item.item_name}
           </Text>
@@ -60,14 +67,10 @@ function FacilityCard({ facility }: { facility: Facility }) {
   return (
     <View style={styles.card}>
       <View style={styles.cardTop}>
+        <IconCircle icon="local_hospital" size={52} />
         <View style={styles.cardHeading}>
-          <View style={styles.typeChip}>
-            <Text style={styles.typeChipText}>{facility.type.toUpperCase()}</Text>
-          </View>
           <Text style={styles.facilityName}>{facility.name}</Text>
-        </View>
-        <View style={styles.facilityIcon}>
-          <Icon name="local_hospital" size={24} color={colors.patient} />
+          <Text style={styles.facilityType}>{facility.type}</Text>
         </View>
       </View>
 
@@ -189,14 +192,7 @@ export default function NearbyFacilities() {
 
   return (
     <Screen refreshing={loading} onRefresh={refresh} contentStyle={styles.content}>
-      <View style={styles.locationBanner}>
-        <View style={styles.locationRow}>
-          <Icon name="location_on" size={20} color={colors.patient} />
-          <Text style={styles.locationText}>{t("facilities.network")}</Text>
-        </View>
-        <Text style={styles.bannerTitle}>{t("facilities.bannerTitle")}</Text>
-        <Text style={styles.bannerBody}>{t("facilities.bannerBody")}</Text>
-      </View>
+      <InfoNote icon="inventory_2" tone="patient" text={t("facilities.bannerBody")} />
 
       <ScrollView
         horizontal
@@ -215,13 +211,6 @@ export default function NearbyFacilities() {
               onPress={() => setFilter(option)}
               style={[styles.filterPill, selected && styles.filterPillOn]}
             >
-              {option === ALL ? (
-                <Icon
-                  name="verified"
-                  size={18}
-                  color={selected ? colors.onPatient : colors.text}
-                />
-              ) : null}
               <Text style={[styles.filterText, selected && styles.filterTextOn]}>
                 {label}
               </Text>
@@ -251,23 +240,12 @@ const styles = StyleSheet.create({
   content: { gap: spacing.md },
   pressed: { opacity: 0.9 },
 
-  locationBanner: {
-    backgroundColor: colors.surfaceContainerLow,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    gap: spacing.xs,
-  },
-  locationRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  locationText: { ...type.labelMd, color: colors.patient },
-  bannerTitle: { ...type.headlineMd, color: colors.text },
-  bannerBody: { ...type.bodyMd, color: colors.muted },
-
-  filterRow: { gap: spacing.xs, paddingRight: spacing.md },
+  filterRow: { gap: spacing.sm, paddingRight: spacing.md },
   filterPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs,
-    height: 40,
+    minHeight: touch.chip,
     paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
     backgroundColor: colors.surfaceContainerHigh,
@@ -282,25 +260,10 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.sm,
   },
-  cardTop: { flexDirection: "row", gap: spacing.xs },
-  cardHeading: { flex: 1, minWidth: 0, gap: spacing.xs },
-  typeChip: {
-    alignSelf: "flex-start",
-    backgroundColor: colors.surfaceContainer,
-    borderRadius: radius.sm,
-    paddingVertical: 2,
-    paddingHorizontal: spacing.xs,
-  },
-  typeChipText: { ...type.labelMd, color: colors.muted, letterSpacing: 0.6 },
+  cardTop: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  cardHeading: { flex: 1, minWidth: 0 },
   facilityName: { ...type.headlineMd, color: colors.text },
-  facilityIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
-    backgroundColor: colors.patientTint,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  facilityType: { ...type.labelMd, fontFamily: type.bodyLg.fontFamily, color: colors.muted },
 
   distanceRow: {
     flexDirection: "row",
@@ -311,7 +274,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
   },
-  distanceText: { ...type.bodyMd, color: colors.text, flex: 1 },
+  distanceText: { ...type.bodyLg, color: colors.text, flex: 1 },
 
   badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
   stockBadge: {
@@ -336,9 +299,8 @@ const styles = StyleSheet.create({
   stockBadgeAltText: { ...type.labelMd, color: colors.onSecondaryContainer },
 
   groupLabel: {
-    ...type.labelMd,
-    color: colors.faint,
-    letterSpacing: 0.6,
+    ...type.labelLg,
+    color: colors.text,
     marginTop: spacing.xs,
   },
   stockList: {
@@ -352,16 +314,16 @@ const styles = StyleSheet.create({
   stockNameOut: { color: colors.muted, textDecorationLine: "line-through" },
   stockState: { ...type.labelMd },
 
-  updated: { ...type.labelMd, color: colors.faint, marginTop: spacing.xs },
+  updated: { ...type.labelMd, color: colors.muted, marginTop: spacing.xs },
   expandButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.xs,
-    minHeight: 48,
+    minHeight: touch.min,
     borderRadius: radius.md,
-    backgroundColor: colors.surfaceContainerHigh,
+    backgroundColor: colors.patientSoft,
   },
   expandText: { ...type.labelLg, color: colors.patient },
-  noStock: { ...type.bodyMd, color: colors.faint },
+  noStock: { ...type.bodyMd, color: colors.muted },
 });

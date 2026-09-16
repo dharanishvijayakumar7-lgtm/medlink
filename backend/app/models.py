@@ -114,6 +114,9 @@ class Doctor(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(120))
     specialization: Mapped[str] = mapped_column(String(120))
+    # The mobile number a doctor signs in with. Unique, and never shared with a
+    # patient. Null only for doctor rows created before sign-in existed.
+    phone: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True)
     # Which facility's stock this doctor maintains. Optional.
     facility_id: Mapped[int | None] = mapped_column(
         ForeignKey("facilities.id"), nullable=True

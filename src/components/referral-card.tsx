@@ -96,7 +96,7 @@ export function ReferralCard({
           <Text style={styles.category}>{t("referral.category")}</Text>
           <Text style={styles.facility}>{referral.to_facility.name}</Text>
         </View>
-        <Badge label={t(meta.label).toUpperCase()} tone={meta.tone} />
+        <Badge label={t(meta.label)} tone={meta.tone} />
       </View>
 
       <Text style={styles.meta}>
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   heading: { flex: 1, minWidth: 0 },
-  category: { ...type.labelMd, color: colors.muted, letterSpacing: 0.8 },
+  category: { ...type.labelMd, color: colors.muted },
   facility: { ...type.headlineMd, color: colors.text },
   meta: { ...type.bodyMd, color: colors.muted },
   statusLine: { ...type.labelLg },
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: 2,
   },
-  notesLabel: { ...type.labelMd, color: colors.faint, letterSpacing: 0.6 },
+  notesLabel: { ...type.labelMd, color: colors.muted },
   notesBody: { ...type.bodyLg, color: colors.text },
 
   author: { ...type.labelMd, color: colors.muted },

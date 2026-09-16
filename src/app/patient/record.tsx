@@ -7,6 +7,7 @@ import { ReferralCard } from "@/components/referral-card";
 import {
   EmptyState,
   ErrorBanner,
+  IconCircle,
   Loading,
   Screen,
   SoftBadge,
@@ -20,13 +21,7 @@ import {
   TriageEntry,
   TriageStatus,
 } from "@/lib/api";
-import {
-  ageShort,
-  formatDateTime,
-  formatIsoDate,
-  genderLabel,
-  languageLabel,
-} from "@/lib/format";
+import { formatDateTime, formatIsoDate } from "@/lib/format";
 import { translate, TranslationKey, useT } from "@/lib/i18n";
 import { usePatientSession } from "@/lib/patient-session";
 import { useLocalizedSymptomTexts } from "@/lib/symptom-text";
@@ -55,7 +50,7 @@ function TimelineHeading({ at }: { at: string }) {
   return (
     <View style={styles.timeRow}>
       <Icon name="calendar_today" size={18} color={colors.patient} />
-      <Text style={styles.timeText}>{formatDateTime(at).toUpperCase()}</Text>
+      <Text style={styles.timeText}>{formatDateTime(at)}</Text>
     </View>
   );
 }
@@ -74,9 +69,7 @@ function EntryCard({
   return (
     <View style={styles.entryCard}>
       <View style={styles.entryTop}>
-        <View style={styles.entryIcon}>
-          <Icon name={icon} size={28} color={colors.onPrimaryFixed} />
-        </View>
+        <IconCircle icon={icon} size={52} />
         <View style={styles.entryHeading}>
           <Text style={styles.entryCategory}>{category}</Text>
           <Text style={styles.entryTitle}>{title}</Text>
@@ -121,7 +114,13 @@ function TriageBlock({ entry }: { entry: TriageEntry }) {
       ) : null}
 
       {entry.answers.length > 0 ? (
-        <Pressable onPress={() => setExpanded(!expanded)} hitSlop={12}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setExpanded(!expanded)}
+          hitSlop={12}
+          style={styles.toggleRow}
+        >
+          <Icon name={expanded ? "expand_less" : "expand_more"} size={24} color={colors.patient} />
           <Text style={styles.toggle}>
             {expanded
               ? t("record.hideAnswers")
@@ -149,7 +148,7 @@ function NoteBlock({ note }: { note: ConsultationNote }) {
               note.follow_up_resolved
                 ? t("record.followUpDone")
                 : t("record.due", {
-                    date: formatIsoDate(note.follow_up_due_date).toUpperCase(),
+                    date: formatIsoDate(note.follow_up_due_date),
                   })
             }
             tone={note.follow_up_resolved ? "success" : "warning"}
@@ -239,35 +238,7 @@ export default function MyRecord() {
 
   return (
     <Screen refreshing={loading} onRefresh={load}>
-      <View style={styles.header}>
-        <View style={styles.headerIcon}>
-          <Icon name="history_edu" size={24} color={colors.onPatient} />
-        </View>
-        <View style={styles.headerBody}>
-          <Text style={styles.headerTitle}>{t("record.title")}</Text>
-          <Text style={styles.headerSubtitle}>
-            {t("record.entries", { count: timeline.length })}
-          </Text>
-        </View>
-      </View>
-
       {error ? <ErrorBanner message={error} onRetry={load} /> : null}
-
-      {record ? (
-        <View style={styles.patientCard}>
-          <Text style={styles.patientName}>{record.name}</Text>
-          <Text style={styles.patientMeta}>
-            {record.unique_code} · {ageShort(record.age_label)} ·{" "}
-            {genderLabel(record.gender)}
-          </Text>
-          <Text style={styles.patientMeta}>
-            {record.village} · {record.phone} ·{" "}
-            {t("record.speaks", {
-              language: languageLabel(record.preferred_language),
-            })}
-          </Text>
-        </View>
-      ) : null}
 
       {timeline.length === 0 ? (
         <EmptyState
@@ -306,28 +277,6 @@ export default function MyRecord() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  headerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primaryContainer,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  headerBody: { flex: 1 },
-  headerTitle: { ...type.headlineMd, color: colors.text },
-  headerSubtitle: { ...type.bodyMd, color: colors.muted },
-
-  patientCard: {
-    ...elevation.level1,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    gap: 2,
-  },
-  patientName: { ...type.headlineMd, color: colors.text },
-  patientMeta: { ...type.bodyMd, color: colors.muted },
-
   timelineItem: { gap: spacing.xs },
   timeRow: {
     flexDirection: "row",
@@ -335,7 +284,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     paddingLeft: spacing.xs,
   },
-  timeText: { ...type.labelLg, color: colors.patient, letterSpacing: 0.6 },
+  timeText: { ...type.labelLg, color: colors.patient },
 
   entryCard: {
     ...elevation.level1,
@@ -344,16 +293,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   entryTop: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  entryIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.tile,
-    backgroundColor: colors.patientTint,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   entryHeading: { flex: 1, minWidth: 0 },
-  entryCategory: { ...type.labelMd, color: colors.muted, letterSpacing: 0.8 },
+  entryCategory: { ...type.labelMd, color: colors.muted },
   entryTitle: { ...type.headlineMd, color: colors.text },
 
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
@@ -375,12 +316,12 @@ const styles = StyleSheet.create({
   },
 
   callout: {
-    backgroundColor: colors.warningTint,
+    backgroundColor: colors.warningSoft,
     borderRadius: radius.md,
     padding: spacing.md,
     gap: 2,
   },
-  calloutLabel: { ...type.labelMd, color: colors.muted, letterSpacing: 0.6 },
+  calloutLabel: { ...type.labelMd, color: colors.muted },
   calloutBody: { ...type.bodyLg, color: colors.text },
 
   answers: {
@@ -390,7 +331,8 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
   answerRow: { gap: 2 },
-  answerQuestion: { ...type.labelMd, color: colors.faint },
+  answerQuestion: { ...type.labelMd, color: colors.muted },
   answerValue: { ...type.bodyLg, color: colors.text },
+  toggleRow: { flexDirection: "row", alignItems: "center", gap: spacing.xs, minHeight: 44 },
   toggle: { ...type.labelLg, color: colors.patient },
 });

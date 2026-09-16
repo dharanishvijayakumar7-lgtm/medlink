@@ -1,6 +1,10 @@
 /**
  * Patient session: {unique_code, phone} persisted in AsyncStorage so reopening
- * the app does not re-register the patient. This is identity, not auth.
+ * the app skips sign-in. The number says who is using the app; there is no OTP
+ * yet, so this is identity, not auth.
+ *
+ * Several patients can share one phone. `phone` is the last number signed in
+ * with, kept when switching family member so the profile list can reopen.
  */
 
 import {
@@ -14,51 +18,69 @@ import {
 } from "react";
 
 import {
+  clearPatientPhone,
   clearPatientSession,
+  loadPatientPhone,
   loadPatientSession,
   PatientSession,
+  savePatientPhone,
   savePatientSession,
 } from "@/lib/storage";
 
 type PatientSessionValue = {
   session: PatientSession | null;
+  /** The number last signed in with, even after switching profile. */
+  phone: string | null;
   /** True until the stored session has been read back from disk. */
   loading: boolean;
-  identify: (session: PatientSession) => Promise<void>;
-  forget: () => Promise<void>;
+  signIn: (session: PatientSession) => Promise<void>;
+  /** Leave this profile but keep the number, to pick another family member. */
+  switchProfile: () => Promise<void>;
+  signOut: () => Promise<void>;
 };
 
 const PatientSessionContext = createContext<PatientSessionValue | null>(null);
 
 export function PatientSessionProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<PatientSession | null>(null);
+  const [phone, setPhone] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
-    loadPatientSession().then((stored) => {
-      if (!active) return;
-      setSession(stored);
-      setLoading(false);
-    });
+    Promise.all([loadPatientSession(), loadPatientPhone()]).then(
+      ([storedSession, storedPhone]) => {
+        if (!active) return;
+        setSession(storedSession);
+        setPhone(storedPhone ?? storedSession?.phone ?? null);
+        setLoading(false);
+      },
+    );
     return () => {
       active = false;
     };
   }, []);
 
-  const identify = useCallback(async (next: PatientSession) => {
-    await savePatientSession(next);
+  const signIn = useCallback(async (next: PatientSession) => {
+    await Promise.all([savePatientSession(next), savePatientPhone(next.phone)]);
+    setPhone(next.phone);
     setSession(next);
   }, []);
 
-  const forget = useCallback(async () => {
+  const switchProfile = useCallback(async () => {
     await clearPatientSession();
     setSession(null);
   }, []);
 
+  const signOut = useCallback(async () => {
+    await Promise.all([clearPatientSession(), clearPatientPhone()]);
+    setPhone(null);
+    setSession(null);
+  }, []);
+
   const value = useMemo(
-    () => ({ session, loading, identify, forget }),
-    [session, loading, identify, forget],
+    () => ({ session, phone, loading, signIn, switchProfile, signOut }),
+    [session, phone, loading, signIn, switchProfile, signOut],
   );
 
   return (

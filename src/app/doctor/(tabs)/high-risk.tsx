@@ -1,13 +1,13 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { Icon } from "@/components/icon";
 import { QueueCard } from "@/components/queue-card";
 import { EmptyState, ErrorBanner, Loading, Screen } from "@/components/ui";
 import { api, QueueItem } from "@/lib/api";
 import { translate, useT } from "@/lib/i18n";
-import { colors, overlay, radius, spacing, touch, type } from "@/lib/theme";
+import { colors, overlay, radius, spacing, type } from "@/lib/theme";
 
 function Telemetry({ label, value }: { label: string; value: string }) {
   return (
@@ -65,13 +65,10 @@ export default function HighRiskWorklist() {
             <Icon name="warning" size={26} color={colors.primaryFixed} />
           </View>
           <View style={styles.bannerHeading}>
-            <Text style={styles.bannerTitle}>{t("highRisk.title")}</Text>
-            <Text style={styles.bannerSubtitle}>{t("highRisk.subtitle")}</Text>
-          </View>
-          <View style={styles.pendingPill}>
-            <Text style={styles.pendingText}>
+            <Text style={styles.bannerTitle}>
               {t("highRisk.flagged", { count: items.length })}
             </Text>
+            <Text style={styles.bannerSubtitle}>{t("highRisk.subtitle")}</Text>
           </View>
         </View>
 
@@ -80,23 +77,6 @@ export default function HighRiskWorklist() {
           <Telemetry label={t("queue.metricPhone")} value={`${counts.fromPhone}`} />
           <Telemetry label={t("highRisk.noTriage")} value={`${counts.noTriage}`} />
         </View>
-      </View>
-
-      <View style={styles.noticeBar}>
-        <View style={styles.noticeLeft}>
-          <Icon name="emergency_home" size={20} color={colors.warning} />
-          <Text style={styles.noticeText} numberOfLines={2}>
-            {t("highRisk.awaiting", { count: items.length })}
-          </Text>
-        </View>
-        <Pressable
-          accessibilityRole="button"
-          onPress={load}
-          style={({ pressed }) => [styles.refresh, pressed && { opacity: 0.7 }]}
-        >
-          <Icon name="sync" size={18} color={colors.patient} />
-          <Text style={styles.refreshText}>{t("common.refresh")}</Text>
-        </Pressable>
       </View>
 
       {error ? <ErrorBanner message={error} onRetry={load} /> : null}
@@ -136,9 +116,9 @@ const styles = StyleSheet.create({
   },
   bannerTop: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   bannerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: overlay.onColorFill,
     alignItems: "center",
     justifyContent: "center",
@@ -146,14 +126,6 @@ const styles = StyleSheet.create({
   bannerHeading: { flex: 1, minWidth: 0 },
   bannerTitle: { ...type.headlineMd, color: colors.onDoctor },
   bannerSubtitle: { ...type.labelMd, color: colors.secondaryFixed },
-  pendingPill: {
-    backgroundColor: colors.tertiaryContainer,
-    borderRadius: radius.pill,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  pendingText: { ...type.labelMd, color: colors.onTertiary },
-
   telemetryStrip: { flexDirection: "row", gap: spacing.xs },
   telemetry: {
     flex: 1,
@@ -166,30 +138,4 @@ const styles = StyleSheet.create({
   telemetryLabel: { ...type.labelMd, color: colors.secondaryFixed },
   telemetryValue: { ...type.headlineMd, color: colors.onDoctor },
 
-  noticeBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.xs,
-    backgroundColor: colors.surfaceContainer,
-    borderRadius: radius.md,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.xs,
-  },
-  noticeLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    flex: 1,
-    minWidth: 0,
-  },
-  noticeText: { ...type.labelMd, color: colors.text, flex: 1 },
-  refresh: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    minHeight: touch.min,
-    paddingHorizontal: spacing.sm,
-  },
-  refreshText: { ...type.labelMd, color: colors.patient },
 });

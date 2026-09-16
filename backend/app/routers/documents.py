@@ -60,6 +60,9 @@ def upload_document(
     file: UploadFile = File(...),
     hospital_name: str | None = Form(None),
     visit_date: str | None = Form(None),
+    # The name the patient picked. The app uploads through a file handle
+    # whose own name may be an opaque id, so the real one comes separately.
+    original_filename: str | None = Form(None),
     db: Session = Depends(get_db),
 ) -> MedicalDocument:
     """Store a PDF and queue it for extraction. Returns PENDING immediately."""
@@ -93,7 +96,9 @@ def upload_document(
         visit_date=entered_date,
         hospital_name_entered=entered_hospital is not None,
         visit_date_entered=entered_date is not None,
-        original_filename=(file.filename or "document.pdf")[:255],
+        original_filename=(
+            _optional_text(original_filename, 255) or file.filename or "document.pdf"
+        )[:255],
         file_path=relative,
         file_size=len(data),
     )

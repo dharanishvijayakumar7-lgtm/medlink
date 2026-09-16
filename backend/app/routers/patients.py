@@ -7,6 +7,7 @@ from app.ages import age_on, today
 from app.database import get_db
 from app.models import ConsultationNote, Doctor, Facility, Patient, TriageEntry
 from app.queries import create_patient as allocate_patient, load_patient, queue_position
+from app.routers.sign_in import valid_mobile
 from app.timeline import build_timeline
 from app.triage_assessment import assess
 from app.schemas import (
@@ -27,8 +28,14 @@ router = APIRouter(prefix="/patients", tags=["patients"])
 
 @router.post("", response_model=PatientOut, status_code=status.HTTP_201_CREATED)
 def create_patient(payload: PatientCreate, db: Session = Depends(get_db)) -> Patient:
-    """Capture a patient's identity and allocate their unique MedLink ID."""
-    return allocate_patient(db, **payload.model_dump())
+    """Capture a patient's identity and allocate their unique MedLink ID.
+
+    The number may already belong to other patients (a family handset), but
+    never to a doctor - create_patient refuses that.
+    """
+    fields = payload.model_dump()
+    fields["phone"] = valid_mobile(payload.phone)
+    return allocate_patient(db, **fields)
 
 
 @router.get("/{unique_code}", response_model=PatientRecord)

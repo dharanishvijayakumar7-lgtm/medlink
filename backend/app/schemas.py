@@ -122,6 +122,8 @@ class FacilityDashboard(BaseModel):
 class DoctorCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     specialization: str = Field(min_length=1, max_length=120)
+    # The mobile number the doctor signs in with.
+    phone: str = Field(min_length=10, max_length=20)
     # The facility whose stock this doctor maintains.
     facility_id: int | None = None
 
@@ -132,8 +134,36 @@ class DoctorOut(BaseModel):
     id: int
     name: str
     specialization: str
+    phone: str | None = None
     created_at: datetime
     facility: FacilitySummary | None = None
+
+
+# --- Sign-in ----------------------------------------------------------------
+
+
+class PhoneLookup(BaseModel):
+    phone: str = Field(min_length=10, max_length=20)
+
+
+class PatientChoice(BaseModel):
+    """One patient on a shared number, for the "who is using MedLink?" list."""
+
+    unique_code: str
+    name: str
+    gender: str
+    age_label: str | None
+
+
+class SignInLookup(BaseModel):
+    """Who a mobile number belongs to. No OTP yet: this is identity, not auth."""
+
+    # The normalised 10-digit number.
+    phone: str
+    role: Literal["patient", "doctor"] | None
+    # Every patient registered on the number, oldest first. Empty for doctors.
+    patients: list[PatientChoice]
+    doctor: DoctorOut | None
 
 
 # --- Triage -----------------------------------------------------------------

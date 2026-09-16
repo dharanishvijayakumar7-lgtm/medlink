@@ -386,22 +386,20 @@ export default function SymptomCheck() {
 
   if (assessment) {
     return (
-      <Screen>
+      <Screen footer={finishButtons}>
         <AssessmentView assessment={assessment} />
-        {finishButtons}
       </Screen>
     );
   }
 
   if (savedWithoutResult) {
     return (
-      <Screen>
+      <Screen footer={finishButtons}>
         <View style={styles.doneCard}>
-          <Icon name="check_circle" size={48} color={colors.success} />
+          <Icon name="check_circle" size={56} color={colors.success} />
           <Text style={styles.doneTitle}>{t("symptom.savedTitle")}</Text>
           <Text style={styles.doneBody}>{t("symptom.result.saved")}</Text>
         </View>
-        {finishButtons}
       </Screen>
     );
   }
@@ -419,24 +417,44 @@ export default function SymptomCheck() {
     );
   }
 
-  const remaining = STEPS.length - index - 1;
-
   return (
-    <Screen>
-      <View style={styles.progress}>
-        <View style={styles.progressRow}>
-          <View style={styles.progressLeft}>
-            <View style={styles.dot} />
-            <Text style={styles.progressLabel}>
-              {t("symptom.progress", { current: index + 1, total: STEPS.length })}
-            </Text>
+    <Screen
+      footer={
+        <>
+          {/* Beside the buttons, where the patient is looking when it fails. */}
+          {error ? (
+            <ErrorBanner message={error} onRetry={isLast ? submit : undefined} />
+          ) : null}
+          <View style={styles.nav}>
+            {index > 0 ? (
+              <Button
+                title={t("common.back")}
+                icon="arrow_back"
+                onPress={() => {
+                  setError(null);
+                  setIndex(index - 1);
+                }}
+                tone="patient"
+                variant="outline"
+                style={styles.navButton}
+              />
+            ) : null}
+            <Button
+              title={isLast ? t("symptom.submit") : t("common.next")}
+              icon={isLast ? "check" : "arrow_forward"}
+              onPress={isLast ? submit : () => setIndex(index + 1)}
+              disabled={!canAdvance}
+              tone="patient"
+              style={styles.navButton}
+            />
           </View>
-          <Text style={styles.progressHint}>
-            {remaining === 0
-              ? t("symptom.lastQuestion")
-              : t("symptom.questionsLeft", { count: remaining })}
-          </Text>
-        </View>
+        </>
+      }
+    >
+      <View style={styles.progress}>
+        <Text style={styles.progressLabel}>
+          {t("symptom.progress", { current: index + 1, total: STEPS.length })}
+        </Text>
         <View style={styles.progressTrack}>
           {STEPS.map((entry, position) => (
             <View
@@ -450,12 +468,9 @@ export default function SymptomCheck() {
         </View>
       </View>
 
-      <View style={styles.contextBand}>
-        <Icon name="health_and_safety" size={18} color={colors.patient} />
-        <Text style={styles.contextText}>{t("symptom.context")}</Text>
-      </View>
-
-      <Text style={styles.question}>{t(step.label)}</Text>
+      <Text style={styles.question} accessibilityRole="header">
+        {t(step.label)}
+      </Text>
 
       {step.kind === "single" ? (
         <View style={styles.options} accessibilityRole="radiogroup">
@@ -495,31 +510,6 @@ export default function SymptomCheck() {
         />
       ) : null}
 
-      {/* Beside the buttons, where the patient is looking when it fails. */}
-      {error ? <ErrorBanner message={error} onRetry={isLast ? submit : undefined} /> : null}
-
-      <View style={styles.nav}>
-        {index > 0 ? (
-          <Button
-            title={t("common.back")}
-            onPress={() => {
-              setError(null);
-              setIndex(index - 1);
-            }}
-            tone="patient"
-            variant="outline"
-            style={styles.navButton}
-          />
-        ) : null}
-        <Button
-          title={isLast ? t("symptom.submit") : t("common.next")}
-          icon={isLast ? "check" : "arrow_forward"}
-          onPress={isLast ? submit : () => setIndex(index + 1)}
-          disabled={!canAdvance}
-          tone="patient"
-          style={styles.navButton}
-        />
-      </View>
     </Screen>
   );
 }
@@ -527,42 +517,16 @@ export default function SymptomCheck() {
 const styles = StyleSheet.create({
   pressed: { opacity: 0.9 },
 
-  progress: { gap: spacing.xs },
-  progressRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: spacing.xs,
-  },
-  progressLeft: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  dot: {
-    width: 10,
-    height: 10,
-    borderRadius: radius.pill,
-    backgroundColor: colors.patient,
-  },
-  progressLabel: { ...type.labelMd, color: colors.patient, letterSpacing: 0.8 },
-  progressHint: { ...type.labelMd, color: colors.muted },
+  progress: { gap: spacing.sm },
+  progressLabel: { ...type.labelLg, color: colors.patient },
   progressTrack: { flexDirection: "row", gap: spacing.xs },
   progressSegment: {
     flex: 1,
-    height: 10,
+    height: 8,
     borderRadius: radius.pill,
     backgroundColor: colors.surfaceContainerHighest,
   },
   progressSegmentOn: { backgroundColor: colors.patient },
-
-  contextBand: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    backgroundColor: colors.surfaceContainer,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-  },
-  contextText: { ...type.labelMd, color: colors.text, flex: 1 },
 
   question: { ...type.headlineLg, color: colors.text, marginTop: spacing.xs },
 
@@ -572,25 +536,31 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
-    minHeight: 64,
+    minHeight: 72,
     borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  optionSelected: { borderColor: colors.patient, backgroundColor: colors.patientTint },
+  optionSelected: {
+    borderColor: colors.patient,
+    borderWidth: 2,
+    backgroundColor: colors.patientSoft,
+  },
   indicator: {
-    width: 28,
-    height: 28,
+    width: 30,
+    height: 30,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceContainer,
+    borderWidth: 2,
+    borderColor: colors.outlineVariant,
+    backgroundColor: colors.card,
     alignItems: "center",
     justifyContent: "center",
   },
-  indicatorOn: { backgroundColor: colors.patient },
+  indicatorOn: { backgroundColor: colors.patient, borderColor: colors.patient },
   optionLabel: { ...type.headlineMd, color: colors.text, flex: 1 },
-  optionLabelOn: { color: colors.onPrimaryFixed },
+  optionLabelOn: { color: colors.text },
 
-  nav: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md },
+  nav: { flexDirection: "row", gap: spacing.sm },
   navButton: { flex: 1 },
 
   doneCard: {

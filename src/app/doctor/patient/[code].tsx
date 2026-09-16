@@ -464,7 +464,7 @@ export default function DoctorPatientDetail() {
             </View>
             <View style={styles.profileHeading}>
               <View style={styles.nameRow}>
-                <Text style={styles.name} numberOfLines={1}>
+                <Text style={styles.name} numberOfLines={2}>
                   {record.name}
                 </Text>
                 <View style={styles.agePill}>
@@ -517,9 +517,9 @@ export default function DoctorPatientDetail() {
         loading={startingCall}
         tone="success"
       />
-      <Text style={styles.callHint}>
-        {isWebRtcAvailable ? t("patientDetail.callHint") : t("patientDetail.callUnavailable")}
-      </Text>
+      {isWebRtcAvailable ? null : (
+        <Text style={styles.callHint}>{t("patientDetail.callUnavailable")}</Text>
+      )}
 
       {/* History first, so the doctor reads it before writing anything. */}
       {timeline ? <DoctorTimeline timeline={timeline} /> : null}
@@ -659,7 +659,7 @@ export default function DoctorPatientDetail() {
 
 const styles = StyleSheet.create({
   profile: {
-    backgroundColor: colors.surfaceContainerHigh,
+    backgroundColor: colors.doctorSoft,
     borderRadius: radius.lg,
     padding: spacing.md,
     gap: spacing.sm,
@@ -703,12 +703,12 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     gap: 2,
   },
-  metaLabel: { ...type.labelMd, color: colors.faint },
+  metaLabel: { ...type.labelMd, color: colors.muted },
   metaValue: { ...type.bodyMd, color: colors.text },
 
   callHint: {
     ...type.labelMd,
-    color: colors.faint,
+    color: colors.muted,
     textAlign: "center",
     marginTop: -spacing.xs,
   },
@@ -720,7 +720,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     flexWrap: "wrap",
   },
-  timestamp: { ...type.labelMd, color: colors.faint },
+  timestamp: { ...type.labelMd, color: colors.muted },
   summary: { ...type.bodyXl, color: colors.text },
   toggle: { ...type.labelLg, color: colors.doctor },
 
@@ -731,7 +731,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
   },
   answerRow: { gap: 2 },
-  answerQuestion: { ...type.labelMd, color: colors.faint },
+  answerQuestion: { ...type.labelMd, color: colors.muted },
   answerValue: { ...type.bodyLg, color: colors.text },
 
   noteText: { ...type.bodyXl, color: colors.text },
@@ -743,9 +743,9 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: 2,
   },
-  calloutWarning: { backgroundColor: colors.warningTint },
-  calloutSuccess: { backgroundColor: colors.successTint },
-  calloutLabel: { ...type.labelMd, color: colors.faint, letterSpacing: 0.6 },
+  calloutWarning: { backgroundColor: colors.warningSoft },
+  calloutSuccess: { backgroundColor: colors.successSoft },
+  calloutLabel: { ...type.labelMd, color: colors.muted },
   calloutBody: { ...type.bodyLg, color: colors.text },
 
   savedNotice: {

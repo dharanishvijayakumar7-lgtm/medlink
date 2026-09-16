@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
   range: { ...type.labelMd, color: colors.muted },
 
   // Same treatment as the "TRIAGE DESK" label and waiting count on the queue.
-  statTitle: { ...type.labelMd, color: colors.muted, letterSpacing: 1 },
+  statTitle: { ...type.labelMd, color: colors.muted },
   statValue: { ...type.headlineXl },
   statCaption: { ...type.bodyLg, color: colors.muted },
   statFootnote: {

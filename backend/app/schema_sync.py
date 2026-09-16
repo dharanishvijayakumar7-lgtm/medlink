@@ -33,6 +33,8 @@ ADDED_COLUMNS: list[tuple[str, str, str]] = [
     # The symptom check result. Null for voice calls and older entries.
     ("triage_entries", "urgency", "VARCHAR(20)"),
     ("triage_entries", "assessment", "JSONB"),
+    # Mobile-number sign-in. Null for doctor rows created before it existed.
+    ("doctors", "phone", "VARCHAR(20)"),
 ]
 
 # (table, column) whose NOT NULL is dropped because the column is now legacy.
@@ -55,6 +57,12 @@ ADDED_INDEXES: list[tuple[str, str, str]] = [
         "consultation_notes",
         "follow_up_resolved",
     ),
+]
+
+# (index name, table, column) - mirrors unique=True on the mapped columns.
+# PostgreSQL treats NULLs as distinct, so older rows without a value are fine.
+ADDED_UNIQUE_INDEXES: list[tuple[str, str, str]] = [
+    ("doctors_phone_key", "doctors", "phone"),
 ]
 
 
@@ -95,6 +103,14 @@ def sync_schema(engine: Engine) -> list[str]:
         for index_name, table, column in ADDED_INDEXES:
             connection.execute(
                 text(f"CREATE INDEX IF NOT EXISTS {index_name} ON {table} ({column})")
+            )
+
+        for index_name, table, column in ADDED_UNIQUE_INDEXES:
+            connection.execute(
+                text(
+                    f"CREATE UNIQUE INDEX IF NOT EXISTS {index_name} "
+                    f"ON {table} ({column})"
+                )
             )
 
     return added

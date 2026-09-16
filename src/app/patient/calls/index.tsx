@@ -3,7 +3,15 @@ import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Icon } from "@/components/icon";
-import { EmptyState, ErrorBanner, Loading, Screen, SoftBadge } from "@/components/ui";
+import {
+  EmptyState,
+  ErrorBanner,
+  IconCircle,
+  InfoNote,
+  Loading,
+  Screen,
+  SoftBadge,
+} from "@/components/ui";
 import { api, CallSummary } from "@/lib/api";
 import { formatCallDuration, urgencyMeta } from "@/lib/calls";
 import { formatDateTime } from "@/lib/format";
@@ -30,9 +38,7 @@ function CallCard({ call, onPress }: { call: CallSummary; onPress: () => void })
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
       <View style={styles.cardTop}>
-        <View style={styles.callIcon}>
-          <Icon name="phone_in_talk" size={26} color={colors.patient} />
-        </View>
+        <IconCircle icon="phone_in_talk" size={52} />
         <View style={styles.cardHeading}>
           <Text style={styles.cardTitle} numberOfLines={2}>
             {title || t("callDetail.fallbackTitle")}
@@ -42,7 +48,7 @@ function CallCard({ call, onPress }: { call: CallSummary; onPress: () => void })
             {duration ? ` · ${duration}` : ""}
           </Text>
         </View>
-        <Icon name="chevron_right" size={24} color={colors.faint} />
+        <Icon name="chevron_right" size={28} color={colors.faint} />
       </View>
       {urgency ? <SoftBadge label={urgency.label} tone={urgency.tone} /> : null}
       {call.summary_text ? (
@@ -94,14 +100,15 @@ export default function CallHistory() {
 
   return (
     <Screen refreshing={refreshing} onRefresh={refresh}>
-      <View style={styles.explainer}>
-        <Icon name="support_agent" size={22} color={colors.patient} />
-        <Text style={styles.explainerText}>
-          {lastFour
+      <InfoNote
+        icon="support_agent"
+        tone="patient"
+        text={
+          lastFour
             ? t("calls.explainerEnding", { digits: lastFour })
-            : t("calls.explainer")}
-        </Text>
-      </View>
+            : t("calls.explainer")
+        }
+      />
 
       {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
 
@@ -132,32 +139,15 @@ export default function CallHistory() {
 const styles = StyleSheet.create({
   pressed: { opacity: 0.9 },
 
-  explainer: {
-    flexDirection: "row",
-    gap: spacing.sm,
-    backgroundColor: colors.surfaceContainerLow,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-  },
-  explainerText: { ...type.bodyLg, color: colors.text, flex: 1 },
-
   card: {
     ...elevation.level1,
     borderRadius: radius.lg,
     padding: spacing.md,
     gap: spacing.sm,
   },
-  cardTop: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  callIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.tile,
-    backgroundColor: colors.patientTint,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  cardTop: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   cardHeading: { flex: 1, minWidth: 0 },
   cardTitle: { ...type.headlineMd, color: colors.text },
-  cardMeta: { ...type.labelMd, color: colors.muted },
+  cardMeta: { ...type.labelMd, fontFamily: type.bodyLg.fontFamily, color: colors.muted },
   summary: { ...type.bodyLg, color: colors.text },
 });
