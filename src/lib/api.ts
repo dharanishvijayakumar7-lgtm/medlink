@@ -7,7 +7,6 @@
  */
 
 import Constants from "expo-constants";
-import { File as FsFile } from "expo-file-system";
 
 import { translate } from "@/lib/i18n";
 
@@ -49,14 +48,12 @@ async function request<T>(
         ...init?.headers,
       },
     });
-  } catch (caught) {
-    const message = translate(
-      controller.signal.aborted ? "error.timeout" : "error.unreachable",
+  } catch {
+    throw new Error(
+      translate(controller.signal.aborted ? "error.timeout" : "error.unreachable", {
+        url: API_BASE_URL,
+      }),
     );
-    // The server address and the underlying error only help whoever runs the
-    // server; to a patient every failed request reads the same.
-    const detail = caught instanceof Error ? `\n${caught.message}` : "";
-    throw new Error(__DEV__ ? `${message}\n${API_BASE_URL}${detail}` : message);
   } finally {
     clearTimeout(timer);
   }
@@ -479,12 +476,12 @@ export const api = {
     extras: { hospital_name?: string; visit_date?: string },
   ) => {
     const form = new FormData();
-    // The global fetch here is Expo's, which cannot send React Native's
-    // { uri, name, type } descriptor - it throws before any request is made.
-    // It reads an expo-file-system File instead (a content:// URI here).
-    form.append("file", new FsFile(file.uri) as unknown as Blob);
-    // The file's own name may be an opaque id; send the one the patient saw.
-    if (file.name) form.append("original_filename", file.name);
+    // React Native's FormData takes a { uri, name, type } descriptor for files.
+    form.append("file", {
+      uri: file.uri,
+      name: file.name || "document.pdf",
+      type: file.mimeType || "application/pdf",
+    } as unknown as Blob);
     if (extras.hospital_name?.trim()) {
       form.append("hospital_name", extras.hospital_name.trim());
     }

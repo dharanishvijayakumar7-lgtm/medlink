@@ -4,7 +4,7 @@ import { ActivityIndicator, Linking, StyleSheet, Text, View } from "react-native
 
 import { DocumentDisclaimer } from "@/components/document-disclaimer";
 import { Icon } from "@/components/icon";
-import { Button, ErrorBanner, IconCircle, Loading, Screen } from "@/components/ui";
+import { Button, ErrorBanner, Loading, Screen } from "@/components/ui";
 import {
   api,
   documentFileUrl,
@@ -12,7 +12,7 @@ import {
   LabFinding,
   MedicalDocument,
 } from "@/lib/api";
-import { formatIsoDate } from "@/lib/format";
+import { formatFileSize, formatIsoDate } from "@/lib/format";
 import { translate, useT } from "@/lib/i18n";
 import { colors, elevation, radius, spacing, type } from "@/lib/theme";
 import { regroup, useTranslated } from "@/lib/use-translated";
@@ -31,7 +31,7 @@ function Section({
   return (
     <View style={styles.section}>
       <View style={styles.sectionHead}>
-        <IconCircle icon={icon} size={40} />
+        <Icon name={icon} size={22} color={colors.patient} />
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
       {children}
@@ -166,7 +166,9 @@ export default function DocumentDetail() {
       {error ? <ErrorBanner message={error} onRetry={fetchDocument} /> : null}
 
       <View style={styles.headerCard}>
-        <IconCircle icon="picture_as_pdf" size={52} />
+        <View style={styles.fileIcon}>
+          <Icon name="picture_as_pdf" size={28} color={colors.patient} />
+        </View>
         <View style={styles.headerBody}>
           <Text style={styles.hospital}>
             {document.hospital_name ?? t("document.hospitalUnknown")}
@@ -175,6 +177,9 @@ export default function DocumentDetail() {
             {document.visit_date
               ? t("document.visit", { date: formatIsoDate(document.visit_date) })
               : t("document.visitUnknown")}
+          </Text>
+          <Text style={styles.meta} numberOfLines={1}>
+            {document.original_filename} · {formatFileSize(document.file_size)}
           </Text>
         </View>
       </View>
@@ -288,14 +293,21 @@ const styles = StyleSheet.create({
   headerCard: {
     ...elevation.level1,
     flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
+    gap: spacing.sm,
     borderRadius: radius.lg,
     padding: spacing.md,
   },
+  fileIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.tile,
+    backgroundColor: colors.patientTint,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   headerBody: { flex: 1, minWidth: 0, gap: 2 },
   hospital: { ...type.headlineMd, color: colors.text },
-  meta: { ...type.bodyLg, fontSize: 16, lineHeight: 24, color: colors.muted },
+  meta: { ...type.bodyMd, color: colors.muted },
 
   analyzing: {
     ...elevation.level1,
@@ -311,9 +323,9 @@ const styles = StyleSheet.create({
   failed: {
     alignItems: "center",
     gap: spacing.sm,
-    backgroundColor: colors.warningSoft,
+    backgroundColor: colors.warningTint,
     borderRadius: radius.lg,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.warning,
     padding: spacing.lg,
   },
@@ -326,8 +338,8 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.sm,
   },
-  sectionHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  sectionTitle: { ...type.headlineMd, color: colors.text, flex: 1 },
+  sectionHead: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  sectionTitle: { ...type.labelLg, color: colors.text, flex: 1 },
   body: { ...type.bodyLg, color: colors.text },
 
   bulletRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
@@ -349,7 +361,7 @@ const styles = StyleSheet.create({
   medDetails: { ...type.bodyMd, color: colors.muted },
 
   labCard: {
-    backgroundColor: colors.warningSoft,
+    backgroundColor: colors.warningTint,
     borderRadius: radius.md,
     padding: spacing.sm,
     gap: 2,
@@ -362,7 +374,7 @@ const styles = StyleSheet.create({
 
   termRow: {
     borderLeftWidth: 3,
-    borderLeftColor: colors.patient,
+    borderLeftColor: colors.patientTint,
     paddingLeft: spacing.sm,
     gap: 2,
   },

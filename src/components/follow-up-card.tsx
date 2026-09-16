@@ -55,7 +55,7 @@ export function FollowUpCard({
             <Icon name="person" size={26} color={colors.doctor} />
           </View>
           <View style={styles.heading}>
-            <Text style={styles.name} numberOfLines={2}>
+            <Text style={styles.name} numberOfLines={1}>
               {item.name}
             </Text>
             <Text style={styles.meta}>
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
     padding: spacing.sm,
     gap: 2,
   },
-  reasonLabel: { ...type.labelMd, color: colors.muted },
+  reasonLabel: { ...type.labelMd, color: colors.faint, letterSpacing: 0.6 },
   reasonText: { ...type.bodyLg, color: colors.text },
 
   footer: { ...type.labelMd, color: colors.faint },

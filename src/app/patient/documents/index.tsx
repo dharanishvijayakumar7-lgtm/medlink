@@ -8,8 +8,6 @@ import {
   Button,
   EmptyState,
   ErrorBanner,
-  IconCircle,
-  InfoNote,
   Loading,
   Screen,
   SoftBadge,
@@ -56,7 +54,9 @@ function DocumentCard({
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
       <View style={styles.cardTop}>
-        <IconCircle icon="picture_as_pdf" size={52} />
+        <View style={styles.fileIcon}>
+          <Icon name="picture_as_pdf" size={28} color={colors.patient} />
+        </View>
         <View style={styles.cardHeading}>
           <Text style={styles.cardTitle} numberOfLines={2}>
             {document.hospital_name ?? document.original_filename}
@@ -69,7 +69,7 @@ function DocumentCard({
             {t("documents.uploaded", { time: timeAgo(document.uploaded_at) })}
           </Text>
         </View>
-        <Icon name="chevron_right" size={28} color={colors.faint} />
+        <Icon name="chevron_right" size={24} color={colors.faint} />
       </View>
 
       <SoftBadge label={t(meta.label)} tone={meta.tone} />
@@ -139,19 +139,28 @@ export default function MyDocuments() {
   const anyReady = documents.some((document) => document.status === "DONE");
 
   return (
-    <Screen
-      refreshing={loading}
-      onRefresh={refresh}
-      footer={
-        <Button
-          title={t("nav.patient.upload")}
-          icon="upload_file"
-          onPress={() => router.push("/patient/documents/upload")}
-          tone="patient"
-        />
-      }
-    >
-      <InfoNote icon="menu_book" tone="patient" text={t("documents.explainer")} />
+    <Screen refreshing={loading} onRefresh={refresh}>
+      <View style={styles.header}>
+        <View style={styles.headerIcon}>
+          <Icon name="description" size={24} color={colors.onPatient} />
+        </View>
+        <View style={styles.headerBody}>
+          <Text style={styles.headerTitle}>{t("home.documentsTitle")}</Text>
+          <Text style={styles.headerSubtitle}>{t("documents.subtitle")}</Text>
+        </View>
+      </View>
+
+      <View style={styles.explainer}>
+        <Icon name="menu_book" size={22} color={colors.patient} />
+        <Text style={styles.explainerText}>{t("documents.explainer")}</Text>
+      </View>
+
+      <Button
+        title={t("nav.patient.upload")}
+        icon="upload_file"
+        onPress={() => router.push("/patient/documents/upload")}
+        tone="patient"
+      />
 
       {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
 
@@ -187,16 +196,46 @@ export default function MyDocuments() {
 const styles = StyleSheet.create({
   pressed: { opacity: 0.9 },
 
+  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  headerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryContainer,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerBody: { flex: 1 },
+  headerTitle: { ...type.headlineMd, color: colors.text },
+  headerSubtitle: { ...type.bodyMd, color: colors.muted },
+
+  explainer: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  explainerText: { ...type.bodyLg, color: colors.text, flex: 1 },
+
   card: {
     ...elevation.level1,
     borderRadius: radius.lg,
     padding: spacing.md,
     gap: spacing.sm,
   },
-  cardTop: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  cardTop: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  fileIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.tile,
+    backgroundColor: colors.patientTint,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   cardHeading: { flex: 1, minWidth: 0 },
   cardTitle: { ...type.headlineMd, color: colors.text },
-  cardMeta: { ...type.labelMd, fontFamily: type.bodyLg.fontFamily, color: colors.muted },
+  cardMeta: { ...type.labelMd, color: colors.muted },
 
   inFlightRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   inFlightText: { ...type.bodyMd, color: colors.patient },

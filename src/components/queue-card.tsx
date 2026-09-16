@@ -66,7 +66,7 @@ export function QueueCard({
           style={({ pressed }) => [styles.body, pressed && styles.pressed]}
         >
           <View style={styles.topRow}>
-            <Text style={styles.name} numberOfLines={2}>
+            <Text style={styles.name} numberOfLines={1}>
               {item.name}
             </Text>
             {item.is_high_risk ? (

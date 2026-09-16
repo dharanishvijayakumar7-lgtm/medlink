@@ -45,6 +45,8 @@ export default function SearchPatient() {
 
   return (
     <Screen>
+      <Text style={styles.lookupLabel}>{t("search.label")}</Text>
+
       <View style={[styles.searchBox, focused && styles.searchBoxFocused]}>
         <Icon name="search" size={28} color={colors.doctor} />
         <TextInput
@@ -67,9 +69,19 @@ export default function SearchPatient() {
             onPress={() => setQuery("")}
             style={styles.clearButton}
           >
-            <Icon name="cancel" size={26} color={colors.muted} />
+            <Icon name="cancel" size={20} color={colors.faint} />
           </Pressable>
         ) : null}
+      </View>
+
+      <View style={styles.hintRow}>
+        <View style={styles.hintLeft}>
+          <Icon name="pin" size={16} color={colors.doctor} />
+          <Text style={styles.hintText}>
+            {t("search.format")} <Text style={styles.hintStrong}>MED-XXXXXX</Text>
+          </Text>
+        </View>
+        <Text style={styles.hintChip}>{t("search.sixDigits")}</Text>
       </View>
 
       {error ? <ErrorBanner message={error} /> : null}
@@ -84,7 +96,7 @@ export default function SearchPatient() {
 
       <View style={styles.helpCard}>
         <View style={styles.helpTop}>
-          <Icon name="help_outline" size={24} color={colors.doctor} />
+          <Icon name="history" size={20} color={colors.doctor} />
           <Text style={styles.helpTitle}>{t("search.helpTitle")}</Text>
         </View>
         <Text style={styles.helpBody}>{t("search.help1")}</Text>
@@ -95,12 +107,14 @@ export default function SearchPatient() {
 }
 
 const styles = StyleSheet.create({
+  lookupLabel: { ...type.labelMd, color: colors.doctor, letterSpacing: 0.8 },
+
   searchBox: {
     ...elevation.level1,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    minHeight: 64,
+    minHeight: 58,
     borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
   },
@@ -119,13 +133,32 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
+  hintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.xs,
+  },
+  hintLeft: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  hintText: { ...type.labelMd, color: colors.muted },
+  hintStrong: { ...type.labelMd, color: colors.text },
+  hintChip: {
+    ...type.labelMd,
+    color: colors.onSecondaryFixed,
+    backgroundColor: colors.secondaryFixed,
+    borderRadius: radius.sm,
+    paddingVertical: 2,
+    paddingHorizontal: spacing.xs,
+    overflow: "hidden",
+  },
+
   helpCard: {
-    backgroundColor: colors.doctorSoft,
+    backgroundColor: colors.surfaceContainerLow,
     borderRadius: radius.lg,
     padding: spacing.md,
     gap: spacing.xs,
   },
-  helpTop: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  helpTop: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   helpTitle: { ...type.headlineMd, color: colors.text },
-  helpBody: { ...type.bodyLg, color: colors.text },
+  helpBody: { ...type.bodyMd, color: colors.muted },
 });

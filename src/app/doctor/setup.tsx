@@ -9,7 +9,6 @@ import {
   Card,
   ChoiceChips,
   ErrorBanner,
-  LinkButton,
   Screen,
   TextField,
 } from "@/components/ui";
@@ -28,10 +27,18 @@ const SPECIALIZATIONS: Record<string, TranslationKey> = {
   Other: "gender.other",
 };
 
-/** First sign-in on a new number: who the doctor is and where they work. */
-export default function DoctorSetup() {
+const ASSURANCES: { icon: string; title: TranslationKey; caption: TranslationKey }[] = [
+  { icon: "lock", title: "doctorSignIn.ehrTitle", caption: "doctorSignIn.ehrCaption" },
+  { icon: "sync_alt", title: "doctorSignIn.syncTitle", caption: "doctorSignIn.syncCaption" },
+];
+
+/**
+ * Doctor details, asked once: the first time a new mobile number signs in
+ * (see ./index). The profile is saved against that number.
+ */
+export default function DoctorIdentity() {
   const router = useRouter();
-  const { signIn } = useDoctorSession();
+  const { setDoctor } = useDoctorSession();
   const { t } = useT();
   const { phone } = useLocalSearchParams<{ phone: string }>();
 
@@ -49,7 +56,7 @@ export default function DoctorSetup() {
     try {
       setFacilities(await api.getFacilities());
     } catch {
-      // Not fatal: a doctor can start without picking a facility.
+      // Not fatal: a doctor can start a session without picking a facility.
       setFacilities([]);
     }
   }, []);
@@ -60,7 +67,7 @@ export default function DoctorSetup() {
     }, [loadFacilities]),
   );
 
-  if (!phone) return <Redirect href="/doctor/sign-in" />;
+  if (!phone) return <Redirect href="/doctor" />;
 
   const resolved =
     specialization === "Other" ? customSpecialization.trim() : specialization ?? "";
@@ -84,51 +91,59 @@ export default function DoctorSetup() {
         phone: phone!,
         facility_id: facilityId,
       });
-      await signIn(doctor, phone!);
-      router.replace("/doctor");
+      setDoctor(doctor);
+      router.replace("/doctor/queue");
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t("common.somethingWrong"));
+    } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <Screen
-      footer={
-        <>
-          {error ? <ErrorBanner message={error} /> : null}
-          <Button
-            title={t("doctorSignIn.start")}
-            icon="check"
-            onPress={handleSubmit}
-            loading={submitting}
-            tone="doctor"
-          />
-        </>
-      }
-    >
-      <Text style={styles.intro}>{t("doctorSignIn.body")}</Text>
-
-      <View style={styles.phoneRow}>
-        <Icon name="smartphone" size={24} color={colors.doctor} />
-        <View style={styles.phoneBody}>
-          <Text style={styles.phoneLabel}>{t("signIn.phoneLabel")}</Text>
-          <Text style={styles.phoneValue}>+91 {phone}</Text>
+    <Screen>
+      <Card>
+        <View style={styles.topRow}>
+          <View style={styles.verifiedPill}>
+            <Icon name="verified_user" size={16} color={colors.onSecondaryContainer} />
+            <Text style={styles.verifiedText}>{t("role.trust")}</Text>
+          </View>
+          <Text style={styles.stepText}>{t("doctorSignIn.step")}</Text>
         </View>
-        <LinkButton
-          title={t("register.changeNumber")}
-          tone="doctor"
-          onPress={() => router.replace("/doctor/sign-in")}
-        />
-      </View>
+
+        <Text style={styles.title}>{t("doctorSignIn.title")}</Text>
+        <Text style={styles.body}>{t("doctorSignIn.body")}</Text>
+
+        <View style={styles.assuranceGrid}>
+          {ASSURANCES.map((item) => (
+            <View key={item.title} style={styles.assurance}>
+              <View style={styles.assuranceIcon}>
+                <Icon name={item.icon} size={18} color={colors.onDoctor} />
+              </View>
+              <View style={styles.assuranceBody}>
+                <Text style={styles.assuranceTitle} numberOfLines={2}>
+                  {t(item.title)}
+                </Text>
+                <Text style={styles.assuranceCaption} numberOfLines={2}>
+                  {t(item.caption)}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      </Card>
+
+      {error ? <ErrorBanner message={error} /> : null}
 
       <Card style={styles.formCard}>
         <TextField
           label={t("doctorSignIn.name")}
+          labelIcon="badge"
           value={name}
           onChangeText={setName}
           placeholder={t("doctorSignIn.namePlaceholder")}
           autoCapitalize="words"
+          hint={t("doctorSignIn.nameHint")}
         />
         <ChoiceChips
           label={t("doctorSignIn.specialization")}
@@ -141,6 +156,7 @@ export default function DoctorSetup() {
         {specialization === "Other" ? (
           <TextField
             label={t("doctorSignIn.specialization")}
+            labelIcon="clinical_notes"
             value={customSpecialization}
             onChangeText={setCustomSpecialization}
             placeholder={t("doctorSignIn.specPlaceholder")}
@@ -156,25 +172,65 @@ export default function DoctorSetup() {
           hint={t("doctorSignIn.facilityHint")}
         />
       </Card>
+
+      <Button
+        title={t("doctorSignIn.start")}
+        icon="login"
+        onPress={handleSubmit}
+        loading={submitting}
+        tone="doctor"
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  intro: { ...type.bodyLg, color: colors.muted },
-
-  phoneRow: {
+  topRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.md,
-    backgroundColor: colors.doctorSoft,
-    borderRadius: radius.lg,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    justifyContent: "space-between",
+    gap: spacing.sm,
   },
-  phoneBody: { flex: 1, minWidth: 0 },
-  phoneLabel: { ...type.labelMd, fontFamily: type.bodyLg.fontFamily, color: colors.muted },
-  phoneValue: { ...type.headlineMd, color: colors.text },
+  verifiedPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: colors.secondaryContainer,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  verifiedText: { ...type.labelMd, color: colors.onSecondaryContainer },
+  stepText: { ...type.labelMd, color: colors.faint },
 
-  formCard: { gap: spacing.lg },
+  title: { ...type.headlineMd, color: colors.text, marginTop: spacing.xs },
+  body: { ...type.bodyMd, color: colors.muted },
+
+  assuranceGrid: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  assurance: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceContainer,
+    borderRadius: radius.md,
+    padding: spacing.sm,
+  },
+  assuranceIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    backgroundColor: colors.doctor,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  assuranceBody: { flex: 1, minWidth: 0 },
+  assuranceTitle: { ...type.labelMd, color: colors.text },
+  assuranceCaption: { ...type.labelMd, color: colors.muted },
+
+  formCard: { gap: spacing.md },
 });
