@@ -15,6 +15,7 @@ import {
 import { api, Facility, FacilityDashboard, RateStat } from "@/lib/api";
 import { formatIsoDate } from "@/lib/format";
 import { useDoctorSession } from "@/lib/doctor-session";
+import { translate, TranslationKey, useT } from "@/lib/i18n";
 import { colors, radius, spacing, type } from "@/lib/theme";
 
 const WINDOWS = ["7 days", "30 days", "90 days", "1 year"] as const;
@@ -23,6 +24,12 @@ const WINDOW_DAYS: Record<string, number> = {
   "30 days": 30,
   "90 days": 90,
   "1 year": 365,
+};
+const WINDOW_LABEL: Record<string, TranslationKey> = {
+  "7 days": "dashboard.window7",
+  "30 days": "dashboard.window30",
+  "90 days": "dashboard.window90",
+  "1 year": "dashboard.window365",
 };
 
 /**
@@ -67,6 +74,7 @@ function RateCard({
   stat: RateStat;
   emptyCaption: string;
 }) {
+  const { t } = useT();
   // A null rate means nothing was due - showing 0% would read as a failure.
   if (stat.rate === null) {
     return (
@@ -83,7 +91,7 @@ function RateCard({
     <StatCard
       title={title}
       value={`${Math.round(stat.rate * 100)}%`}
-      caption={`${stat.completed} of ${stat.total} completed`}
+      caption={t("dashboard.completed", { completed: stat.completed, total: stat.total })}
       tone={rateTone(stat.rate)}
     />
   );
@@ -91,6 +99,7 @@ function RateCard({
 
 export default function FacilityDashboardScreen() {
   const { doctor } = useDoctorSession();
+  const { t } = useT();
 
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [facilityId, setFacilityId] = useState<number | null>(
@@ -109,7 +118,7 @@ export default function FacilityDashboardScreen() {
       setError(null);
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : "Could not load facilities.",
+        caught instanceof Error ? caught.message : translate("stock.facilitiesFailed"),
       );
     } finally {
       setLoading(false);
@@ -138,7 +147,7 @@ export default function FacilityDashboardScreen() {
       .catch((caught: unknown) => {
         if (active) {
           setError(
-            caught instanceof Error ? caught.message : "Could not load the dashboard.",
+            caught instanceof Error ? caught.message : translate("dashboard.loadFailed"),
           );
         }
       });
@@ -148,26 +157,27 @@ export default function FacilityDashboardScreen() {
   }, [facilityId, days]);
 
   if (loading && facilities.length === 0) {
-    return <Loading label="Loading dashboard..." />;
+    return <Loading label={t("dashboard.loading")} />;
   }
 
   return (
     <Screen>
       <FacilityPicker
-        label="Facility"
+        label={t("stock.facility")}
         facilities={facilities}
         selectedId={facilityId}
         onSelect={setFacilityId}
         allowNone={false}
-        emptyLabel="Choose a facility"
+        emptyLabel={t("stock.chooseFacility")}
       />
 
       <ChoiceChips
-        label="Time window"
+        label={t("dashboard.window")}
         options={WINDOWS}
         value={window}
         onChange={setWindow}
         tone="doctor"
+        optionLabel={(option) => t(WINDOW_LABEL[option] ?? option)}
       />
 
       {error ? <ErrorBanner message={error} onRetry={loadFacilities} /> : null}
@@ -175,13 +185,19 @@ export default function FacilityDashboardScreen() {
       {data ? (
         <>
           <Text style={styles.range}>
-            {formatIsoDate(data.from_date)} to {formatIsoDate(data.to_date)}
+            {t("dashboard.range", {
+              from: formatIsoDate(data.from_date),
+              to: formatIsoDate(data.to_date),
+            })}
           </Text>
 
           <StatCard
-            title="PATIENT LOAD"
+            title={t("dashboard.load")}
             value={String(data.patient_load.value)}
-            caption={`${data.patient_load.referred_patients} referred in - ${data.patient_load.seen_by_facility_doctors} seen by this facility's doctors`}
+            caption={t("dashboard.loadCaption", {
+              referred: data.patient_load.referred_patients,
+              seen: data.patient_load.seen_by_facility_doctors,
+            })}
             tone="doctor"
             footnote={
               data.patient_load.is_proxy ? data.patient_load.basis : undefined
@@ -189,26 +205,25 @@ export default function FacilityDashboardScreen() {
           />
 
           <RateCard
-            title="REFERRAL COMPLETION"
+            title={t("dashboard.referralTitle")}
             stat={data.referral_completion_rate}
-            emptyCaption="No referrals to this facility in this window."
+            emptyCaption={t("dashboard.referralEmpty")}
           />
 
           <RateCard
-            title="FOLLOW-UP COMPLETION"
+            title={t("dashboard.followUpTitle")}
             stat={data.follow_up_completion_rate}
-            emptyCaption="No follow-ups fell due in this window."
+            emptyCaption={t("dashboard.followUpEmpty")}
           />
 
           <View style={styles.aside}>
             <Text style={styles.asideText}>
-              {data.patient_load.stock_updates} stock update
-              {data.patient_load.stock_updates === 1 ? "" : "s"} in this window.
+              {t("dashboard.stockUpdates", { count: data.patient_load.stock_updates })}
             </Text>
           </View>
         </>
       ) : !error ? (
-        <Loading label="Loading figures..." />
+        <Loading label={t("dashboard.loadingFigures")} />
       ) : null}
     </Screen>
   );

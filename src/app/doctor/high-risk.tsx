@@ -6,6 +6,7 @@ import { Icon } from "@/components/icon";
 import { QueueCard } from "@/components/queue-card";
 import { EmptyState, ErrorBanner, Loading, Screen } from "@/components/ui";
 import { api, QueueItem } from "@/lib/api";
+import { translate, useT } from "@/lib/i18n";
 import { colors, overlay, radius, spacing, touch, type } from "@/lib/theme";
 
 function Telemetry({ label, value }: { label: string; value: string }) {
@@ -20,6 +21,7 @@ function Telemetry({ label, value }: { label: string; value: string }) {
 /** The doctor queue filtered to patients a doctor flagged for follow-up. */
 export default function HighRiskWorklist() {
   const router = useRouter();
+  const { t } = useT();
   const [items, setItems] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +33,7 @@ export default function HighRiskWorklist() {
       setError(null);
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : "Could not load the worklist.",
+        caught instanceof Error ? caught.message : translate("highRisk.loadFailed"),
       );
     } finally {
       setLoading(false);
@@ -63,28 +65,28 @@ export default function HighRiskWorklist() {
             <Icon name="warning" size={26} color={colors.primaryFixed} />
           </View>
           <View style={styles.bannerHeading}>
-            <Text style={styles.bannerTitle}>High-Risk Priority Worklist</Text>
-            <Text style={styles.bannerSubtitle}>
-              Maternal, child and chronic-condition follow-ups
-            </Text>
+            <Text style={styles.bannerTitle}>{t("highRisk.title")}</Text>
+            <Text style={styles.bannerSubtitle}>{t("highRisk.subtitle")}</Text>
           </View>
           <View style={styles.pendingPill}>
-            <Text style={styles.pendingText}>{items.length} flagged</Text>
+            <Text style={styles.pendingText}>
+              {t("highRisk.flagged", { count: items.length })}
+            </Text>
           </View>
         </View>
 
         <View style={styles.telemetryStrip}>
-          <Telemetry label="Still waiting" value={`${counts.waiting}`} />
-          <Telemetry label="From phone" value={`${counts.fromPhone}`} />
-          <Telemetry label="No triage yet" value={`${counts.noTriage}`} />
+          <Telemetry label={t("highRisk.stillWaiting")} value={`${counts.waiting}`} />
+          <Telemetry label={t("queue.metricPhone")} value={`${counts.fromPhone}`} />
+          <Telemetry label={t("highRisk.noTriage")} value={`${counts.noTriage}`} />
         </View>
       </View>
 
       <View style={styles.noticeBar}>
         <View style={styles.noticeLeft}>
           <Icon name="emergency_home" size={20} color={colors.warning} />
-          <Text style={styles.noticeText} numberOfLines={1}>
-            {items.length} case{items.length === 1 ? "" : "s"} awaiting doctor review
+          <Text style={styles.noticeText} numberOfLines={2}>
+            {t("highRisk.awaiting", { count: items.length })}
           </Text>
         </View>
         <Pressable
@@ -93,19 +95,19 @@ export default function HighRiskWorklist() {
           style={({ pressed }) => [styles.refresh, pressed && { opacity: 0.7 }]}
         >
           <Icon name="sync" size={18} color={colors.patient} />
-          <Text style={styles.refreshText}>Refresh</Text>
+          <Text style={styles.refreshText}>{t("common.refresh")}</Text>
         </Pressable>
       </View>
 
       {error ? <ErrorBanner message={error} onRetry={load} /> : null}
 
       {loading && items.length === 0 ? (
-        <Loading label="Loading worklist..." />
+        <Loading label={t("highRisk.loading")} />
       ) : items.length === 0 ? (
         <EmptyState
           icon="verified_user"
-          title="Nobody flagged yet"
-          body="Flag a patient from their record to add them to this worklist."
+          title={t("highRisk.emptyTitle")}
+          body={t("highRisk.emptyBody")}
         />
       ) : (
         items.map((item) => (

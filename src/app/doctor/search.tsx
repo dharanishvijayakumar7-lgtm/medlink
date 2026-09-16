@@ -6,10 +6,12 @@ import { Icon } from "@/components/icon";
 import { Button, ErrorBanner, Screen } from "@/components/ui";
 import { api } from "@/lib/api";
 import { normalisePatientCode } from "@/lib/format";
+import { useT } from "@/lib/i18n";
 import { colors, elevation, radius, spacing, touch, type } from "@/lib/theme";
 
 export default function SearchPatient() {
   const router = useRouter();
+  const { t } = useT();
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   const [searching, setSearching] = useState(false);
@@ -18,7 +20,7 @@ export default function SearchPatient() {
   async function search() {
     const code = normalisePatientCode(query);
     if (!/^MED-\d{6}$/.test(code)) {
-      setError("Enter a MedLink ID in the form MED-482119.");
+      setError(t("search.formatError"));
       return;
     }
 
@@ -35,7 +37,7 @@ export default function SearchPatient() {
         params: { code: record.unique_code },
       });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Search failed.");
+      setError(caught instanceof Error ? caught.message : t("search.failed"));
     } finally {
       setSearching(false);
     }
@@ -43,7 +45,7 @@ export default function SearchPatient() {
 
   return (
     <Screen>
-      <Text style={styles.lookupLabel}>PATIENT DIRECTORY LOOKUP</Text>
+      <Text style={styles.lookupLabel}>{t("search.label")}</Text>
 
       <View style={[styles.searchBox, focused && styles.searchBoxFocused]}>
         <Icon name="search" size={28} color={colors.doctor} />
@@ -52,7 +54,7 @@ export default function SearchPatient() {
           onChangeText={setQuery}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          placeholder="Enter Patient ID, e.g. MED-482119"
+          placeholder={t("search.placeholder")}
           placeholderTextColor={colors.faint}
           autoCapitalize="characters"
           autoCorrect={false}
@@ -63,7 +65,7 @@ export default function SearchPatient() {
         {query.length > 0 ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Clear search"
+            accessibilityLabel={t("search.clear")}
             onPress={() => setQuery("")}
             style={styles.clearButton}
           >
@@ -76,16 +78,16 @@ export default function SearchPatient() {
         <View style={styles.hintLeft}>
           <Icon name="pin" size={16} color={colors.doctor} />
           <Text style={styles.hintText}>
-            Format: <Text style={styles.hintStrong}>MED-XXXXXX</Text>
+            {t("search.format")} <Text style={styles.hintStrong}>MED-XXXXXX</Text>
           </Text>
         </View>
-        <Text style={styles.hintChip}>Six digits</Text>
+        <Text style={styles.hintChip}>{t("search.sixDigits")}</Text>
       </View>
 
       {error ? <ErrorBanner message={error} /> : null}
 
       <Button
-        title="Open record"
+        title={t("search.open")}
         icon="folder_shared"
         onPress={search}
         loading={searching}
@@ -95,16 +97,10 @@ export default function SearchPatient() {
       <View style={styles.helpCard}>
         <View style={styles.helpTop}>
           <Icon name="history" size={20} color={colors.doctor} />
-          <Text style={styles.helpTitle}>Finding a patient</Text>
+          <Text style={styles.helpTitle}>{t("search.helpTitle")}</Text>
         </View>
-        <Text style={styles.helpBody}>
-          Ask the patient for the MedLink ID on their home screen. Typing the six
-          digits alone works too - the MED- prefix is added for you.
-        </Text>
-        <Text style={styles.helpBody}>
-          Patients who only ever phoned the voice agent also have an ID; it is read
-          out to them at the end of the call.
-        </Text>
+        <Text style={styles.helpBody}>{t("search.help1")}</Text>
+        <Text style={styles.helpBody}>{t("search.help2")}</Text>
       </View>
     </Screen>
   );

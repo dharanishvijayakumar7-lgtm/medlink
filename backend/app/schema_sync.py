@@ -30,6 +30,9 @@ ADDED_COLUMNS: list[tuple[str, str, str]] = [
     # Replaces the self-reported age. Null for patients registered before it
     # existed - left null, never back-filled with a guessed date.
     ("patients", "date_of_birth", "DATE"),
+    # The symptom check result. Null for voice calls and older entries.
+    ("triage_entries", "urgency", "VARCHAR(20)"),
+    ("triage_entries", "assessment", "JSONB"),
 ]
 
 # (table, column) whose NOT NULL is dropped because the column is now legacy.

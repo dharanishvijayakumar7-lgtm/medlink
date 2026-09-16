@@ -8,6 +8,8 @@
 
 import Constants from "expo-constants";
 
+import { translate } from "@/lib/i18n";
+
 function resolveBaseUrl(): string {
   const fromEnv = process.env.EXPO_PUBLIC_API_URL;
   if (fromEnv) return fromEnv.replace(/\/+$/, "");
@@ -20,7 +22,19 @@ function resolveBaseUrl(): string {
 
 export const API_BASE_URL = resolveBaseUrl();
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+/** Most calls answer in well under a second; a symptom check waits on Gemini. */
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
+): Promise<T> {
+  // Without a limit, a request a firewall silently drops never settles and the
+  // screen spins forever.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
   let response: Response;
   try {
     // JSON bodies are sent as strings. A FormData upload must not get this
@@ -28,6 +42,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const isJson = typeof init?.body === "string";
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
+      signal: controller.signal,
       headers: {
         ...(isJson ? { "Content-Type": "application/json" } : {}),
         ...init?.headers,
@@ -35,8 +50,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     });
   } catch {
     throw new Error(
-      `Cannot reach the MedLink server at ${API_BASE_URL}. Check that it is running and on the same network.`,
+      translate(controller.signal.aborted ? "error.timeout" : "error.unreachable", {
+        url: API_BASE_URL,
+      }),
     );
+  } finally {
+    clearTimeout(timer);
   }
 
   if (!response.ok) {
@@ -63,7 +82,7 @@ async function readError(response: Response): Promise<string> {
   } catch {
     // fall through to the generic message
   }
-  return `Request failed (${response.status})`;
+  return translate("error.requestFailed", { status: response.status });
 }
 
 function post<T>(path: string, body?: unknown): Promise<T> {
@@ -101,7 +120,24 @@ export type Patient = {
   created_at: string;
 };
 
-export type TriageAnswer = { question: string; answer: string };
+/** `id` is the symptom-check question id; the server's safety rules read it. */
+export type TriageAnswer = { id?: string; question: string; answer: string };
+
+export type TriageUrgency = "HOME_CARE" | "SEE_DOCTOR_SOON" | "EMERGENCY";
+
+/** The symptom check result, in English. Null for voice calls and older entries. */
+export type TriageAssessment = {
+  urgency: TriageUrgency;
+  /** Danger signs the fixed safety rules found in the answers. */
+  red_flags: string[];
+  possible_causes: string[];
+  what_to_do: string[];
+  danger_signs: string[];
+  plain_summary: string;
+  /** "rules" when Gemini was unavailable. */
+  source: string;
+  model: string | null;
+};
 
 export type TriageEntry = {
   id: number;
@@ -109,6 +145,8 @@ export type TriageEntry = {
   answers: TriageAnswer[];
   status: TriageStatus;
   source: TriageSource;
+  urgency: TriageUrgency | null;
+  assessment: TriageAssessment | null;
   created_at: string;
 };
 
@@ -426,10 +464,12 @@ export const api = {
       form.append("hospital_name", extras.hospital_name.trim());
     }
     if (extras.visit_date?.trim()) form.append("visit_date", extras.visit_date.trim());
-    return request<MedicalDocument>(`/patients/${code(unique)}/documents`, {
-      method: "POST",
-      body: form,
-    });
+    // A 15 MB scan on a slow rural connection needs longer than a JSON call.
+    return request<MedicalDocument>(
+      `/patients/${code(unique)}/documents`,
+      { method: "POST", body: form },
+      120_000,
+    );
   },
 
   listDocuments: (unique: string) =>
@@ -445,6 +485,10 @@ export const api = {
 
   getPatientCall: (unique: string, callId: string) =>
     request<CallSummary>(`/patients/${code(unique)}/calls/${code(callId)}`),
+
+  /** English -> `target`. `translated` is false when the English came back unchanged. */
+  translate: (texts: string[], target: string) =>
+    post<{ texts: string[]; translated: boolean }>("/translate", { texts, target }),
 
   getPatientReferrals: (unique: string) =>
     request<Referral[]>(`/patients/${code(unique)}/referrals`),

@@ -5,6 +5,7 @@ import { Pressable } from "react-native-gesture-handler";
 import { Icon } from "@/components/icon";
 import { FollowUpItem } from "@/lib/api";
 import { ageShort, formatIsoDate } from "@/lib/format";
+import { useT } from "@/lib/i18n";
 import { colors, elevation, overlay, radius, spacing, type } from "@/lib/theme";
 
 /**
@@ -21,6 +22,7 @@ export function FollowUpCard({
   item: FollowUpItem;
   onPress: () => void;
 }) {
+  const { t } = useT();
   const overdue = item.days_overdue > 0;
 
   return (
@@ -35,10 +37,10 @@ export function FollowUpCard({
           size={20}
           color={colors.onWarning}
         />
-        <Text style={styles.bannerText} numberOfLines={1}>
+        <Text style={styles.bannerText} numberOfLines={2}>
           {overdue
-            ? `FOLLOW-UP ${item.days_overdue} DAY${item.days_overdue === 1 ? "" : "S"} OVERDUE`
-            : "FOLLOW-UP DUE TODAY"}
+            ? t("followUp.overdueBanner", { count: item.days_overdue })
+            : t("followUp.dueTodayBanner")}
         </Text>
         <View style={styles.bannerTag}>
           <Text style={styles.bannerTagText}>
@@ -64,13 +66,13 @@ export function FollowUpCard({
         </View>
 
         <View style={styles.reasonBox}>
-          <Text style={styles.reasonLabel}>REASON</Text>
+          <Text style={styles.reasonLabel}>{t("followUp.reason")}</Text>
           <Text style={styles.reasonText} numberOfLines={2}>
             {item.high_risk_reason?.trim() || item.note_text}
           </Text>
         </View>
 
-        <Text style={styles.footer}>Set by Dr. {item.doctor_name}</Text>
+        <Text style={styles.footer}>{t("followUp.setBy", { name: item.doctor_name })}</Text>
       </View>
     </Pressable>
   );

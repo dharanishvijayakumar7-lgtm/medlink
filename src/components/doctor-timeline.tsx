@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Icon } from "@/components/icon";
+import { TRIAGE_STATUS_META } from "@/components/queue-card";
+import { REFERRAL_STATUS_META } from "@/components/referral-card";
 import { SoftBadge } from "@/components/ui";
 import {
   ConsultationNote,
@@ -12,14 +14,21 @@ import {
   TimelineKind,
   TriageEntry,
 } from "@/lib/api";
-import { formatIsoDate } from "@/lib/format";
+import { ageLabel, formatIsoDate } from "@/lib/format";
+import { TranslationKey, useT } from "@/lib/i18n";
 import { colors, radius, spacing, touch, type } from "@/lib/theme";
 
-const KIND_META: Record<TimelineKind, { icon: string; label: string }> = {
-  document: { icon: "description", label: "UPLOADED RECORD" },
-  triage: { icon: "monitor_heart", label: "SYMPTOM CHECK" },
-  note: { icon: "stethoscope", label: "DOCTOR NOTE" },
-  referral: { icon: "local_hospital", label: "REFERRAL" },
+const KIND_META: Record<TimelineKind, { icon: string; label: TranslationKey }> = {
+  document: { icon: "description", label: "timeline.kind.document" },
+  triage: { icon: "monitor_heart", label: "timeline.kind.triage" },
+  note: { icon: "stethoscope", label: "timeline.kind.note" },
+  referral: { icon: "local_hospital", label: "referral.category" },
+};
+
+const URGENCY_LABEL: Record<string, TranslationKey> = {
+  EMERGENCY: "timeline.urgency.emergency",
+  SEE_DOCTOR_SOON: "timeline.urgency.soon",
+  HOME_CARE: "timeline.urgency.home",
 };
 
 function DetailLine({ label, value }: { label: string; value: string }) {
@@ -32,13 +41,16 @@ function DetailLine({ label, value }: { label: string; value: string }) {
 }
 
 function DocumentDetail({ document }: { document: MedicalDocument }) {
+  const { t } = useT();
   const summary = document.extracted_summary;
 
   if (document.status === "FAILED") {
-    return <DetailLine label="COULD NOT BE READ" value={document.failure_reason ?? ""} />;
+    return (
+      <DetailLine label={t("timeline.couldNotRead")} value={document.failure_reason ?? ""} />
+    );
   }
   if (!summary) {
-    return <DetailLine label="STATUS" value="Still being analysed on the server." />;
+    return <DetailLine label={t("timeline.status")} value={t("timeline.stillAnalysing")} />;
   }
 
   const extractedHospital = summary.hospital_name;
@@ -46,11 +58,11 @@ function DocumentDetail({ document }: { document: MedicalDocument }) {
     <>
       <Text style={styles.detailBody}>{summary.plain_summary}</Text>
       {summary.symptoms.length > 0 ? (
-        <DetailLine label="SYMPTOMS" value={summary.symptoms.join(", ")} />
+        <DetailLine label={t("timeline.symptoms")} value={summary.symptoms.join(", ")} />
       ) : null}
       {summary.medications.length > 0 ? (
         <DetailLine
-          label="MEDICINES"
+          label={t("timeline.medicines")}
           value={summary.medications
             .map((m) => (m.details ? `${m.name} - ${m.details}` : m.name))
             .join("\n")}
@@ -58,7 +70,7 @@ function DocumentDetail({ document }: { document: MedicalDocument }) {
       ) : null}
       {summary.deficiencies.length > 0 ? (
         <DetailLine
-          label="LOW RESULTS"
+          label={t("timeline.lowResults")}
           value={summary.deficiencies
             .map((f) => `${f.test}${f.value ? ` ${f.value}` : ""}`)
             .join("\n")}
@@ -66,32 +78,34 @@ function DocumentDetail({ document }: { document: MedicalDocument }) {
       ) : null}
       {summary.excesses.length > 0 ? (
         <DetailLine
-          label="HIGH RESULTS"
+          label={t("timeline.highResults")}
           value={summary.excesses
             .map((f) => `${f.test}${f.value ? ` ${f.value}` : ""}`)
             .join("\n")}
         />
       ) : null}
       <DetailLine
-        label="VISIT DATE"
+        label={t("timeline.visitDate")}
         value={
           document.visit_date
             ? `${formatIsoDate(document.visit_date)} (${
-                document.visit_date_entered ? "entered by patient" : "read from the record"
+                document.visit_date_entered
+                  ? t("timeline.enteredByPatient")
+                  : t("timeline.readFromRecord")
               })`
-            : "Not found in the record"
+            : t("timeline.notFoundInRecord")
         }
       />
       {document.hospital_name_entered &&
       extractedHospital &&
       extractedHospital.toLowerCase() !== (document.hospital_name ?? "").toLowerCase() ? (
-        <DetailLine label="NAME ON THE RECORD" value={extractedHospital} />
+        <DetailLine label={t("timeline.nameOnRecord")} value={extractedHospital} />
       ) : null}
       {summary.patient_age_mentioned ? (
         // Raw context only. The headline age comes from date of birth.
         <DetailLine
-          label="AGE WRITTEN IN THE RECORD"
-          value={`${summary.patient_age_mentioned} - as written; the age shown above is calculated from date of birth`}
+          label={t("timeline.ageInRecord")}
+          value={t("timeline.ageInRecordValue", { age: summary.patient_age_mentioned })}
         />
       ) : null}
     </>
@@ -99,14 +113,35 @@ function DocumentDetail({ document }: { document: MedicalDocument }) {
 }
 
 function TriageDetail({ triage }: { triage: TriageEntry }) {
+  const { t } = useT();
+  const assessment = triage.assessment;
   return (
     <>
       <DetailLine
-        label="STATUS"
-        value={`${triage.status.replace("_", " ").toLowerCase()} · via ${
-          triage.source === "voice_call" ? "phone call" : "app"
-        }`}
+        label={t("timeline.status")}
+        value={t("timeline.statusVia", {
+          status: t(TRIAGE_STATUS_META[triage.status].label),
+          source:
+            triage.source === "voice_call"
+              ? t("call.channel.phone")
+              : t("queue.sourceApp"),
+        })}
       />
+      {assessment ? (
+        // What the patient was told after submitting, so the doctor sees it too.
+        <DetailLine
+          label={t("timeline.resultShown")}
+          value={[
+            URGENCY_LABEL[assessment.urgency]
+              ? t(URGENCY_LABEL[assessment.urgency])
+              : assessment.urgency,
+            assessment.red_flags.length > 0 ? assessment.red_flags.join(", ") : null,
+            assessment.source === "rules" ? t("timeline.rulesOnly") : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        />
+      ) : null}
       {triage.answers.map((answer, index) => (
         <DetailLine key={index} label={answer.question.toUpperCase()} value={answer.answer} />
       ))}
@@ -115,18 +150,28 @@ function TriageDetail({ triage }: { triage: TriageEntry }) {
 }
 
 function NoteDetail({ note }: { note: ConsultationNote }) {
+  const { t } = useT();
   return (
     <>
       <Text style={styles.detailBody}>{note.note_text}</Text>
-      <DetailLine label="DOCTOR" value={`Dr. ${note.doctor.name} · ${note.doctor.specialization}`} />
+      <DetailLine
+        label={t("timeline.doctor")}
+        value={t("timeline.doctorValue", {
+          name: note.doctor.name,
+          specialization: note.doctor.specialization,
+        })}
+      />
       {note.is_high_risk ? (
-        <DetailLine label="HIGH RISK" value={note.high_risk_reason ?? "Flagged for follow-up"} />
+        <DetailLine
+          label={t("common.highRisk")}
+          value={note.high_risk_reason ?? t("timeline.flaggedForFollowUp")}
+        />
       ) : null}
       {note.follow_up_due_date ? (
         <DetailLine
-          label="FOLLOW-UP"
+          label={t("timeline.followUp")}
           value={`${formatIsoDate(note.follow_up_due_date)} · ${
-            note.follow_up_resolved ? "done" : "open"
+            note.follow_up_resolved ? t("timeline.followUpDone") : t("timeline.followUpOpen")
           }`}
         />
       ) : null}
@@ -135,19 +180,24 @@ function NoteDetail({ note }: { note: ConsultationNote }) {
 }
 
 function ReferralDetail({ referral }: { referral: Referral }) {
+  const { t } = useT();
   return (
     <>
       <DetailLine
-        label="REFERRED TO"
+        label={t("timeline.referredTo")}
         value={`${referral.to_facility.name} (${referral.to_facility.type})`}
       />
-      <DetailLine label="STATUS" value={referral.status.replace("_", " ").toLowerCase()} />
-      {referral.notes ? <DetailLine label="NOTE" value={referral.notes} /> : null}
+      <DetailLine
+        label={t("timeline.status")}
+        value={t(REFERRAL_STATUS_META[referral.status].label)}
+      />
+      {referral.notes ? <DetailLine label={t("timeline.note")} value={referral.notes} /> : null}
     </>
   );
 }
 
 function TimelineRow({ entry, isLast }: { entry: TimelineEntry; isLast: boolean }) {
+  const { t } = useT();
   const [expanded, setExpanded] = useState(false);
   const meta = KIND_META[entry.kind];
   const external = entry.kind === "document";
@@ -166,18 +216,20 @@ function TimelineRow({ entry, isLast }: { entry: TimelineEntry; isLast: boolean 
         <View style={styles.dateRow}>
           <Text style={styles.date}>
             {formatIsoDate(entry.date).toUpperCase()}
-            {entry.date_is_estimated ? " (upload date)" : ""}
+            {entry.date_is_estimated ? ` (${t("timeline.uploadDate")})` : ""}
           </Text>
           {entry.age_at_date_label ? (
             <View style={styles.agePill}>
-              <Text style={styles.ageText}>Age {entry.age_at_date_label}</Text>
+              <Text style={styles.ageText}>
+                {t("timeline.age", { age: ageLabel(entry.age_at_date_label) })}
+              </Text>
             </View>
           ) : null}
         </View>
 
         <View style={styles.chips}>
           <SoftBadge label={entry.source} tone={external ? "doctor" : "patient"} />
-          <Text style={styles.kind}>{meta.label}</Text>
+          <Text style={styles.kind}>{t(meta.label)}</Text>
         </View>
 
         <Text style={styles.title}>{entry.title}</Text>
@@ -198,7 +250,9 @@ function TimelineRow({ entry, isLast }: { entry: TimelineEntry; isLast: boolean 
           hitSlop={8}
         >
           <Icon name={expanded ? "expand_less" : "expand_more"} size={20} color={colors.doctor} />
-          <Text style={styles.toggleText}>{expanded ? "Hide details" : "Show details"}</Text>
+          <Text style={styles.toggleText}>
+            {expanded ? t("timeline.hideDetails") : t("timeline.showDetails")}
+          </Text>
         </Pressable>
       </View>
     </View>
@@ -210,6 +264,7 @@ function TimelineRow({ entry, isLast }: { entry: TimelineEntry; isLast: boolean 
  * events, oldest first, each with the patient's age on that date.
  */
 export function DoctorTimeline({ timeline }: { timeline: PatientTimeline }) {
+  const { t } = useT();
   const { entries, patient } = timeline;
 
   return (
@@ -217,9 +272,9 @@ export function DoctorTimeline({ timeline }: { timeline: PatientTimeline }) {
       <View style={styles.header}>
         <Icon name="timeline" size={24} color={colors.doctor} />
         <View style={styles.headerBody}>
-          <Text style={styles.headerTitle}>Timeline</Text>
+          <Text style={styles.headerTitle}>{t("timeline.title")}</Text>
           <Text style={styles.headerSub}>
-            {entries.length} {entries.length === 1 ? "entry" : "entries"} · oldest first
+            {t("timeline.entries", { count: entries.length })}
           </Text>
         </View>
       </View>
@@ -227,15 +282,12 @@ export function DoctorTimeline({ timeline }: { timeline: PatientTimeline }) {
       {patient.date_of_birth === null ? (
         <View style={styles.noDob}>
           <Icon name="cake" size={20} color={colors.warning} />
-          <Text style={styles.noDobText}>
-            Ages at each visit are not shown - this patient has not given a date of
-            birth yet.
-          </Text>
+          <Text style={styles.noDobText}>{t("timeline.noDob")}</Text>
         </View>
       ) : null}
 
       {entries.length === 0 ? (
-        <Text style={styles.empty}>No history yet.</Text>
+        <Text style={styles.empty}>{t("timeline.empty")}</Text>
       ) : (
         entries.map((entry, index) => (
           <TimelineRow

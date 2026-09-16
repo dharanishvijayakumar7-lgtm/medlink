@@ -1,8 +1,10 @@
-/** Small display helpers shared by both flows. */
+/** Small display helpers shared by both flows, in the app's language. */
+
+import { currentLocale, translate } from "@/lib/i18n";
 
 export function formatDateTime(iso: string): string {
   const date = new Date(iso);
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString(currentLocale(), {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -13,13 +15,13 @@ export function formatDateTime(iso: string): string {
 
 export function timeAgo(iso: string): string {
   const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
-  if (seconds < 60) return "just now";
+  if (seconds < 60) return translate("time.justNow");
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 60) return translate("time.minutesAgo", { count: minutes });
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours} hr ago`;
+  if (hours < 24) return translate("time.hoursAgo", { count: hours });
   const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`;
+  if (days < 30) return translate("time.daysAgo", { count: days });
   return formatDateTime(iso);
 }
 
@@ -64,7 +66,7 @@ export function isValidIsoDate(value: string): boolean {
 
 export function formatIsoDate(value: string): string {
   const [year, month, day] = value.split("-").map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString(undefined, {
+  return new Date(year, month - 1, day).toLocaleDateString(currentLocale(), {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -84,10 +86,9 @@ export function daysUntilIsoDate(value: string): number {
 /** "Due today", "Due in 5 days", "3 days overdue". */
 export function describeDueDate(value: string): string {
   const days = daysUntilIsoDate(value);
-  if (days === 0) return "Due today";
-  if (days > 0) return `Due in ${days} day${days === 1 ? "" : "s"}`;
-  const overdue = -days;
-  return `${overdue} day${overdue === 1 ? "" : "s"} overdue`;
+  if (days === 0) return translate("due.today");
+  if (days > 0) return translate("due.inDays", { count: days });
+  return translate("due.overdue", { count: -days });
 }
 
 // --- Age (always computed by the server) ------------------------------------
@@ -96,14 +97,47 @@ export function describeDueDate(value: string): string {
 // at request time and sends a label. These only choose what to show when a
 // patient registered before date of birth was collected has none.
 
+/**
+ * The server's age label ("33 yrs", "1 yr 3 mo", "7 mo") in the app's
+ * language. Anything it does not recognise is shown as sent.
+ */
+export function ageLabel(label: string): string {
+  const match = /^(?:(\d+) yrs?)?\s*(?:(\d+) mo)?$/.exec(label.trim());
+  if (!match || (!match[1] && !match[2])) return label;
+  const parts: string[] = [];
+  if (match[1]) parts.push(translate("age.years", { count: Number(match[1]) }));
+  if (match[2]) parts.push(translate("age.months", { count: Number(match[2]) }));
+  return parts.join(" ");
+}
+
 /** For compact rows, e.g. "33 yrs" or "Age -". */
 export function ageShort(label: string | null | undefined): string {
-  return label ?? "Age —";
+  return label ? ageLabel(label) : translate("age.unknownShort");
 }
 
 /** For demographics, e.g. "33 yrs" or "Not provided". */
 export function ageLong(label: string | null | undefined): string {
-  return label ?? "Not provided";
+  return label ? ageLabel(label) : translate("common.notProvided");
+}
+
+const GENDERS: Record<string, string> = {
+  female: "gender.female",
+  male: "gender.male",
+  other: "gender.other",
+  unknown: "gender.unknown",
+};
+
+/** A stored language name ("Hindi") in the app's language; unknown names as sent. */
+export function languageLabel(name: string): string {
+  const key = `language.${name.trim().toLowerCase()}`;
+  const shown = translate(key);
+  return shown === key ? name : shown;
+}
+
+/** Gender is stored in English; this is only what is shown. */
+export function genderLabel(gender: string): string {
+  const key = GENDERS[gender.trim().toLowerCase()];
+  return key ? translate(key) : gender;
 }
 
 /** "248 KB", "1.4 MB". */

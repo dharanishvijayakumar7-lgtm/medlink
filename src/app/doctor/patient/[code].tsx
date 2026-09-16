@@ -7,7 +7,7 @@ import { DueDateField } from "@/components/due-date-field";
 import { FacilityPicker } from "@/components/facility-picker";
 import { Icon } from "@/components/icon";
 import { TRIAGE_STATUS_META } from "@/components/queue-card";
-import { ReferralCard } from "@/components/referral-card";
+import { REFERRAL_STATUS_META, ReferralCard } from "@/components/referral-card";
 import {
   Badge,
   Button,
@@ -33,17 +33,27 @@ import {
 } from "@/lib/api";
 import {
   ageLong,
+  daysUntilIsoDate,
   describeDueDate,
   formatDateTime,
   formatIsoDate,
   isValidIsoDate,
+  languageLabel,
 } from "@/lib/format";
 import { useDoctorSession } from "@/lib/doctor-session";
+import { translate, TranslationKey, useT } from "@/lib/i18n";
 import { isWebRtcAvailable } from "@/lib/livekit";
 import { colors, radius, spacing, touch, type } from "@/lib/theme";
 
 /** Statuses a doctor can move a referral to, beyond the one it already has. */
 const NEXT_STATUSES: ReferralStatus[] = ["CONFIRMED", "COMPLETED", "NO_SHOW"];
+
+/** What the patient was told after an in-app symptom check. */
+const URGENCY_LABEL: Record<string, { label: TranslationKey; tone: "emergency" | "warning" | "success" }> = {
+  EMERGENCY: { label: "timeline.urgency.emergency", tone: "emergency" },
+  SEE_DOCTOR_SOON: { label: "timeline.urgency.soon", tone: "warning" },
+  HOME_CARE: { label: "timeline.urgency.home", tone: "success" },
+};
 
 function MetaCell({ label, value }: { label: string; value: string }) {
   return (
@@ -57,17 +67,23 @@ function MetaCell({ label, value }: { label: string; value: string }) {
 }
 
 function TriageCard({ entry }: { entry: TriageEntry }) {
+  const { t } = useT();
   const [expanded, setExpanded] = useState(false);
   const statusMeta = TRIAGE_STATUS_META[entry.status];
   const fromPhone = entry.source === "voice_call";
+  const urgency = entry.urgency ? URGENCY_LABEL[entry.urgency] : undefined;
 
   return (
     <Card>
       <View style={styles.badgeRow}>
-        <SoftBadge label={statusMeta.short} tone={statusMeta.tone} />
-        <SoftBadge label={fromPhone ? "PHONE CALL" : "APP"} tone="neutral" />
+        <SoftBadge label={t(statusMeta.short)} tone={statusMeta.tone} />
+        <SoftBadge
+          label={fromPhone ? t("record.phoneCall") : t("patientDetail.app")}
+          tone="neutral"
+        />
         <Text style={styles.timestamp}>{formatDateTime(entry.created_at)}</Text>
       </View>
+      {urgency ? <SoftBadge label={t(urgency.label)} tone={urgency.tone} /> : null}
       <Text style={styles.summary}>{entry.summary}</Text>
 
       {expanded ? (
@@ -84,7 +100,9 @@ function TriageCard({ entry }: { entry: TriageEntry }) {
       {entry.answers.length > 0 ? (
         <Pressable onPress={() => setExpanded(!expanded)} hitSlop={12}>
           <Text style={styles.toggle}>
-            {expanded ? "Hide answers" : `Show all ${entry.answers.length} answers`}
+            {expanded
+              ? t("record.hideAnswers")
+              : t("record.showAnswers", { count: entry.answers.length })}
           </Text>
         </Pressable>
       ) : null}
@@ -103,22 +121,26 @@ function NoteCard({
   onReopen: (noteId: number) => void;
   busy: boolean;
 }) {
+  const { t } = useT();
   const due = note.follow_up_due_date;
-  const overdue =
-    due !== null && !note.follow_up_resolved && describeDueDate(due).includes("overdue");
+  const overdue = due !== null && !note.follow_up_resolved && daysUntilIsoDate(due) < 0;
 
   return (
     <Card clinical={note.is_high_risk}>
       <View style={styles.badgeRow}>
         {note.is_high_risk ? (
-          <Badge label="HIGH RISK" tone="warning" icon="warning" />
+          <Badge label={t("common.highRisk")} tone="warning" icon="warning" />
         ) : null}
         {note.referred_to_facility ? (
-          <SoftBadge label="REFERRED" tone="warning" />
+          <SoftBadge label={t("patientDetail.referred")} tone="warning" />
         ) : null}
         {due !== null ? (
           <SoftBadge
-            label={note.follow_up_resolved ? "FOLLOW-UP DONE" : "FOLLOW-UP OPEN"}
+            label={
+              note.follow_up_resolved
+                ? t("record.followUpDone")
+                : t("patientDetail.followUpOpen")
+            }
             tone={note.follow_up_resolved ? "success" : "warning"}
           />
         ) : null}
@@ -129,14 +151,14 @@ function NoteCard({
 
       {note.is_high_risk && note.high_risk_reason ? (
         <View style={styles.callout}>
-          <Text style={styles.calloutLabel}>REASON FOR FOLLOW-UP</Text>
+          <Text style={styles.calloutLabel}>{t("record.followUpReason")}</Text>
           <Text style={styles.calloutBody}>{note.high_risk_reason}</Text>
         </View>
       ) : null}
 
       {note.referred_to_facility ? (
         <View style={styles.callout}>
-          <Text style={styles.calloutLabel}>REFERRED TO</Text>
+          <Text style={styles.calloutLabel}>{t("timeline.referredTo")}</Text>
           <Text style={styles.calloutBody}>
             {note.referred_to_facility.name} ({note.referred_to_facility.type})
           </Text>
@@ -154,7 +176,7 @@ function NoteCard({
                 : undefined,
           ]}
         >
-          <Text style={styles.calloutLabel}>FOLLOW-UP</Text>
+          <Text style={styles.calloutLabel}>{t("timeline.followUp")}</Text>
           <Text style={styles.calloutBody}>
             {formatIsoDate(due)} · {describeDueDate(due)}
           </Text>
@@ -181,14 +203,19 @@ function NoteCard({
                 note.follow_up_resolved && { color: colors.muted },
               ]}
             >
-              {note.follow_up_resolved ? "Reopen follow-up" : "Mark follow-up done"}
+              {note.follow_up_resolved
+                ? t("patientDetail.reopenFollowUp")
+                : t("patientDetail.markFollowUpDone")}
             </Text>
           </Pressable>
         </View>
       ) : null}
 
       <Text style={styles.author}>
-        Dr. {note.doctor.name} · {note.doctor.specialization}
+        {t("timeline.doctorValue", {
+          name: note.doctor.name,
+          specialization: note.doctor.specialization,
+        })}
       </Text>
     </Card>
   );
@@ -198,6 +225,7 @@ export default function DoctorPatientDetail() {
   const router = useRouter();
   const { code } = useLocalSearchParams<{ code: string }>();
   const { doctor } = useDoctorSession();
+  const { t } = useT();
 
   const [record, setRecord] = useState<PatientRecord | null>(null);
   const [timeline, setTimeline] = useState<PatientTimeline | null>(null);
@@ -241,7 +269,7 @@ export default function DoctorPatientDetail() {
       setTimeline(nextTimeline);
       setError(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not load the record.");
+      setError(caught instanceof Error ? caught.message : translate("patientDetail.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -267,9 +295,7 @@ export default function DoctorPatientDetail() {
     if (!isWebRtcAvailable) {
       // Opening a room the doctor cannot join would leave the patient staring
       // at a Join prompt for a call nobody is in.
-      setError(
-        "Video calls need a development build (npx expo run:android). Expo Go has no WebRTC module.",
-      );
+      setError(t("patientDetail.callNeedsBuild"));
       return;
     }
     setStartingCall(true);
@@ -289,7 +315,7 @@ export default function DoctorPatientDetail() {
       });
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : "Could not start the consultation.",
+        caught instanceof Error ? caught.message : t("patientDetail.callFailed"),
       );
     } finally {
       setStartingCall(false);
@@ -299,13 +325,13 @@ export default function DoctorPatientDetail() {
   async function saveNote() {
     if (!doctor || !record) return;
     if (!noteText.trim()) {
-      setNoteError("Please write the note before saving.");
+      setNoteError(t("patientDetail.noteEmpty"));
       return;
     }
 
     const due = followUpDraft.trim();
     if (highRisk && due && !isValidIsoDate(due)) {
-      setNoteError("The follow-up date must look like YYYY-MM-DD.");
+      setNoteError(t("patientDetail.noteDateFormat"));
       return;
     }
 
@@ -328,7 +354,7 @@ export default function DoctorPatientDetail() {
       await load();
     } catch (caught) {
       setNoteError(
-        caught instanceof Error ? caught.message : "Could not save the note.",
+        caught instanceof Error ? caught.message : t("patientDetail.noteFailed"),
       );
     } finally {
       setSavingNote(false);
@@ -338,7 +364,7 @@ export default function DoctorPatientDetail() {
   async function createReferral() {
     if (!doctor || !record) return;
     if (referralFacilityId === null) {
-      setReferralError("Choose the facility you are referring to.");
+      setReferralError(t("patientDetail.referralNoFacility"));
       return;
     }
 
@@ -356,7 +382,7 @@ export default function DoctorPatientDetail() {
       await load();
     } catch (caught) {
       setReferralError(
-        caught instanceof Error ? caught.message : "Could not create the referral.",
+        caught instanceof Error ? caught.message : t("patientDetail.referralFailed"),
       );
     } finally {
       setSavingReferral(false);
@@ -370,7 +396,7 @@ export default function DoctorPatientDetail() {
       await load();
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : "Could not close the follow-up.",
+        caught instanceof Error ? caught.message : t("patientDetail.closeFailed"),
       );
     } finally {
       setBusyFollowUp(null);
@@ -384,7 +410,7 @@ export default function DoctorPatientDetail() {
       await load();
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : "Could not reopen the follow-up.",
+        caught instanceof Error ? caught.message : t("patientDetail.reopenFailed"),
       );
     } finally {
       setBusyFollowUp(null);
@@ -398,7 +424,7 @@ export default function DoctorPatientDetail() {
       await load();
     } catch (caught) {
       setReferralError(
-        caught instanceof Error ? caught.message : "Could not update the referral.",
+        caught instanceof Error ? caught.message : t("patientDetail.referralUpdateFailed"),
       );
     } finally {
       setBusyReferral(null);
@@ -406,13 +432,18 @@ export default function DoctorPatientDetail() {
   }
 
   if (!doctor) return <Loading />;
-  if (loading && !record) return <Loading label="Loading record..." />;
+  if (loading && !record) return <Loading label={t("patientDetail.loading")} />;
 
   if (error && !record) {
     return (
       <Screen>
         <ErrorBanner message={error} onRetry={load} />
-        <Button title="Back" onPress={() => router.back()} tone="doctor" variant="outline" />
+        <Button
+          title={t("common.back")}
+          onPress={() => router.back()}
+          tone="doctor"
+          variant="outline"
+        />
       </Screen>
     );
   }
@@ -421,7 +452,7 @@ export default function DoctorPatientDetail() {
 
   return (
     <Screen refreshing={loading} onRefresh={load}>
-      <Stack.Screen options={{ title: record?.unique_code ?? "Patient record" }} />
+      <Stack.Screen options={{ title: record?.unique_code ?? t("nav.doctor.patient") }} />
 
       {error ? <ErrorBanner message={error} onRetry={load} /> : null}
 
@@ -445,8 +476,8 @@ export default function DoctorPatientDetail() {
               </View>
               <Text style={styles.born}>
                 {record.date_of_birth
-                  ? `Born ${formatIsoDate(record.date_of_birth)}`
-                  : "Date of birth not provided"}
+                  ? t("patientDetail.born", { date: formatIsoDate(record.date_of_birth) })
+                  : t("patientDetail.noDob")}
               </Text>
               <View style={styles.idChip}>
                 <Text style={styles.idChipText}>{record.unique_code}</Text>
@@ -455,59 +486,65 @@ export default function DoctorPatientDetail() {
           </View>
 
           <View style={styles.badgeRow}>
-            {flagged ? <Badge label="HIGH RISK" tone="warning" icon="warning" /> : null}
+            {flagged ? (
+              <Badge label={t("common.highRisk")} tone="warning" icon="warning" />
+            ) : null}
             {record.queue_position !== null ? (
-              <SoftBadge label={`#${record.queue_position} IN QUEUE`} tone="doctor" />
+              <SoftBadge
+                label={t("patientDetail.inQueue", { position: record.queue_position })}
+                tone="doctor"
+              />
             ) : null}
           </View>
 
           <View style={styles.metaGrid}>
             {/* Computed by the server from date of birth, at request time. */}
-            <MetaCell label="Age" value={ageLong(record.age_label)} />
-            <MetaCell label="Village" value={record.village} />
-            <MetaCell label="Phone" value={record.phone} />
-            <MetaCell label="Language" value={record.preferred_language} />
+            <MetaCell label={t("patientDetail.age")} value={ageLong(record.age_label)} />
+            <MetaCell label={t("patientDetail.village")} value={record.village} />
+            <MetaCell label={t("patientDetail.phone")} value={record.phone} />
+            <MetaCell
+              label={t("patientDetail.language")}
+              value={languageLabel(record.preferred_language)}
+            />
           </View>
         </View>
       ) : null}
 
       <Button
-        title="Start video consultation"
+        title={t("patientDetail.startCall")}
         icon="videocam"
         onPress={startCall}
         loading={startingCall}
         tone="success"
       />
       <Text style={styles.callHint}>
-        {isWebRtcAvailable
-          ? "Opens a room on the same LiveKit project as the voice agent. The patient sees a Join prompt on their home screen."
-          : "Unavailable in Expo Go - run a development build to make consultations work."}
+        {isWebRtcAvailable ? t("patientDetail.callHint") : t("patientDetail.callUnavailable")}
       </Text>
 
       {/* History first, so the doctor reads it before writing anything. */}
       {timeline ? <DoctorTimeline timeline={timeline} /> : null}
 
-      <SectionTitle>Add consultation note</SectionTitle>
+      <SectionTitle>{t("patientDetail.addNote")}</SectionTitle>
       <Card style={styles.formCard}>
         {noteError ? <ErrorBanner message={noteError} /> : null}
         {savedNote ? (
           <View style={styles.savedNotice}>
             <Icon name="check_circle" size={20} color={colors.success} />
-            <Text style={styles.savedNoticeText}>Note saved</Text>
+            <Text style={styles.savedNoticeText}>{t("patientDetail.noteSaved")}</Text>
           </View>
         ) : null}
 
         <TextField
-          label="Note"
+          label={t("patientDetail.note")}
           labelIcon="clinical_notes"
           value={noteText}
           onChangeText={setNoteText}
-          placeholder="Assessment, advice, medication given..."
+          placeholder={t("patientDetail.notePlaceholder")}
           multiline
         />
 
         <Checkbox
-          label="Flag as high-risk / needs follow-up"
+          label={t("patientDetail.flag")}
           value={highRisk}
           onValueChange={setHighRisk}
           tone="warning"
@@ -516,10 +553,10 @@ export default function DoctorPatientDetail() {
         {highRisk ? (
           <>
             <TextField
-              label="Reason for follow-up"
+              label={t("patientDetail.reason")}
               value={riskReason}
               onChangeText={setRiskReason}
-              placeholder="e.g. Third trimester with high BP - review in 7 days"
+              placeholder={t("patientDetail.reasonPlaceholder")}
               multiline
             />
             <DueDateField value={followUpDraft} onChange={setFollowUpDraft} />
@@ -527,7 +564,7 @@ export default function DoctorPatientDetail() {
         ) : null}
 
         <Button
-          title="Save note"
+          title={t("patientDetail.saveNote")}
           icon="save"
           onPress={saveNote}
           loading={savingNote}
@@ -535,26 +572,26 @@ export default function DoctorPatientDetail() {
         />
       </Card>
 
-      <SectionTitle>Refer to a facility</SectionTitle>
+      <SectionTitle>{t("patientDetail.referTitle")}</SectionTitle>
       <Card style={styles.formCard}>
         {referralError ? <ErrorBanner message={referralError} /> : null}
         <FacilityPicker
-          label="Refer to"
+          label={t("patientDetail.referTo")}
           facilities={facilities}
           selectedId={referralFacilityId}
           onSelect={setReferralFacilityId}
-          emptyLabel="Choose a facility"
-          hint="The patient can follow this referral's status on their record."
+          emptyLabel={t("stock.chooseFacility")}
+          hint={t("patientDetail.referHint")}
         />
         <TextField
-          label="Referral note (optional)"
+          label={t("patientDetail.referNote")}
           value={referralNotes}
           onChangeText={setReferralNotes}
-          placeholder="Why you are referring, what they should ask for"
+          placeholder={t("patientDetail.referNotePlaceholder")}
           multiline
         />
         <Button
-          title="Create referral"
+          title={t("patientDetail.createReferral")}
           icon="send"
           onPress={createReferral}
           loading={savingReferral}
@@ -564,7 +601,7 @@ export default function DoctorPatientDetail() {
 
       {record && record.referrals.length > 0 ? (
         <>
-          <SectionTitle>Referrals</SectionTitle>
+          <SectionTitle>{t("patientDetail.referrals")}</SectionTitle>
           {record.referrals.map((referral) => (
             <ReferralCard key={referral.id} referral={referral} audience="doctor">
               <View style={styles.statusActions}>
@@ -582,9 +619,7 @@ export default function DoctorPatientDetail() {
                       ]}
                     >
                       <Text style={styles.statusButtonText}>
-                        {status === "NO_SHOW"
-                          ? "No show"
-                          : status.charAt(0) + status.slice(1).toLowerCase()}
+                        {t(REFERRAL_STATUS_META[status].label)}
                       </Text>
                     </Pressable>
                   ),
@@ -595,16 +630,16 @@ export default function DoctorPatientDetail() {
         </>
       ) : null}
 
-      <SectionTitle>Triage history</SectionTitle>
+      <SectionTitle>{t("patientDetail.triageHistory")}</SectionTitle>
       {record && record.triage_entries.length > 0 ? (
         record.triage_entries.map((entry) => (
           <TriageCard key={entry.id} entry={entry} />
         ))
       ) : (
-        <EmptyState icon="monitor_heart" title="No symptom checks yet" />
+        <EmptyState icon="monitor_heart" title={t("patientDetail.noTriage")} />
       )}
 
-      <SectionTitle>Past notes</SectionTitle>
+      <SectionTitle>{t("patientDetail.pastNotes")}</SectionTitle>
       {record && record.notes.length > 0 ? (
         record.notes.map((note) => (
           <NoteCard
@@ -616,7 +651,7 @@ export default function DoctorPatientDetail() {
           />
         ))
       ) : (
-        <EmptyState icon="clinical_notes" title="No notes yet" />
+        <EmptyState icon="clinical_notes" title={t("patientDetail.noNotes")} />
       )}
     </Screen>
   );

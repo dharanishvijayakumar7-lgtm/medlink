@@ -5,6 +5,7 @@ import { Icon } from "@/components/icon";
 import { DateOfBirthField } from "@/components/past-date-field";
 import { Button, ErrorBanner } from "@/components/ui";
 import { api, Patient } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 import { colors, radius, spacing, type } from "@/lib/theme";
 
 /**
@@ -22,6 +23,7 @@ export function DateOfBirthPrompt({
   onSaved: (patient: Patient) => void;
   onSkip: () => void;
 }) {
+  const { t } = useT();
   const [dateOfBirth, setDateOfBirth] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +35,7 @@ export function DateOfBirthPrompt({
     try {
       onSaved(await api.updatePatient(uniqueCode, { date_of_birth: dateOfBirth }));
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not save your date of birth.");
+      setError(caught instanceof Error ? caught.message : t("dob.saveFailed"));
       setSaving(false);
     }
   }
@@ -45,11 +47,8 @@ export function DateOfBirthPrompt({
           <Icon name="cake" size={26} color={colors.patient} />
         </View>
         <View style={styles.headBody}>
-          <Text style={styles.title}>Add your date of birth</Text>
-          <Text style={styles.body}>
-            It lets your doctor see your age at every past visit. It takes a few
-            seconds.
-          </Text>
+          <Text style={styles.title}>{t("dob.title")}</Text>
+          <Text style={styles.body}>{t("dob.body")}</Text>
         </View>
       </View>
 
@@ -58,7 +57,7 @@ export function DateOfBirthPrompt({
       <DateOfBirthField value={dateOfBirth} onChange={setDateOfBirth} />
 
       <Button
-        title="Save date of birth"
+        title={t("dob.save")}
         icon="check"
         onPress={save}
         loading={saving}
@@ -71,7 +70,7 @@ export function DateOfBirthPrompt({
         style={styles.skip}
         hitSlop={12}
       >
-        <Text style={styles.skipText}>Skip for now</Text>
+        <Text style={styles.skipText}>{t("dob.skip")}</Text>
       </Pressable>
     </View>
   );

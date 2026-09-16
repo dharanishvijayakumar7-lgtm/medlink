@@ -14,6 +14,7 @@ import {
 import { api, Facility, StockItem } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useDoctorSession } from "@/lib/doctor-session";
+import { translate, useT } from "@/lib/i18n";
 import { colors, spacing, type } from "@/lib/theme";
 
 function StockRow({
@@ -25,12 +26,13 @@ function StockRow({
   onToggle: (item: StockItem, next: boolean) => void;
   busy: boolean;
 }) {
+  const { t } = useT();
   return (
     <View style={styles.row}>
       <View style={styles.rowBody}>
         <Text style={styles.itemName}>{item.item_name}</Text>
         <Text style={[styles.itemState, item.available ? styles.inStock : styles.outStock]}>
-          {item.available ? "In stock" : "Out of stock"}
+          {item.available ? t("facilities.inStock") : t("stock.outOfStock")}
         </Text>
       </View>
       <Switch
@@ -46,6 +48,7 @@ function StockRow({
 
 export default function FacilityStockScreen() {
   const { doctor } = useDoctorSession();
+  const { t } = useT();
 
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [facilityId, setFacilityId] = useState<number | null>(
@@ -69,7 +72,7 @@ export default function FacilityStockScreen() {
       setFacilityId((current) => current ?? list[0]?.id ?? null);
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : "Could not load facilities.",
+        caught instanceof Error ? caught.message : translate("stock.facilitiesFailed"),
       );
     } finally {
       setLoading(false);
@@ -97,7 +100,7 @@ export default function FacilityStockScreen() {
       .catch((caught: unknown) => {
         if (active) {
           setError(
-            caught instanceof Error ? caught.message : "Could not load stock.",
+            caught instanceof Error ? caught.message : translate("stock.loadFailed"),
           );
         }
       });
@@ -126,7 +129,7 @@ export default function FacilityStockScreen() {
       } catch (caught) {
         replace(item);
         setError(
-          caught instanceof Error ? caught.message : "Could not save that change.",
+          caught instanceof Error ? caught.message : translate("stock.saveFailed"),
         );
       } finally {
         setBusyItem(null);
@@ -135,7 +138,7 @@ export default function FacilityStockScreen() {
     [facilityId],
   );
 
-  if (loading && facilities.length === 0) return <Loading label="Loading stock..." />;
+  if (loading && facilities.length === 0) return <Loading label={t("stock.loading")} />;
 
   const medicines = items.filter((item) => item.item_type === "medicine");
   const diagnostics = items.filter((item) => item.item_type === "diagnostic");
@@ -146,27 +149,24 @@ export default function FacilityStockScreen() {
 
   return (
     <Screen>
-      <Text style={styles.intro}>
-        What you mark here is what patients see on their facility finder before
-        they travel.
-      </Text>
+      <Text style={styles.intro}>{t("stock.intro")}</Text>
 
       <FacilityPicker
-        label="Facility"
+        label={t("stock.facility")}
         facilities={facilities}
         selectedId={facilityId}
         onSelect={setFacilityId}
         allowNone={false}
-        emptyLabel="Choose a facility"
+        emptyLabel={t("stock.chooseFacility")}
       />
 
       {error ? <ErrorBanner message={error} onRetry={loadFacilities} /> : null}
 
       {items.length === 0 ? (
-        <EmptyState title="No stock items for this facility" />
+        <EmptyState title={t("stock.empty")} />
       ) : (
         <>
-          <SectionTitle>Medicines</SectionTitle>
+          <SectionTitle>{t("stock.medicines")}</SectionTitle>
           <Card style={styles.group}>
             {medicines.map((item) => (
               <StockRow
@@ -178,7 +178,7 @@ export default function FacilityStockScreen() {
             ))}
           </Card>
 
-          <SectionTitle>Tests and diagnostics</SectionTitle>
+          <SectionTitle>{t("stock.tests")}</SectionTitle>
           <Card style={styles.group}>
             {diagnostics.map((item) => (
               <StockRow
@@ -192,7 +192,7 @@ export default function FacilityStockScreen() {
 
           {lastUpdated ? (
             <Text style={styles.updated}>
-              Last change {formatDateTime(lastUpdated)}
+              {t("stock.lastChange", { time: formatDateTime(lastUpdated) })}
             </Text>
           ) : null}
         </>

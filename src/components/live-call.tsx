@@ -28,6 +28,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/icon";
 import { api } from "@/lib/api";
+import { translate, useT } from "@/lib/i18n";
 import { colors, overlay, radius, spacing, touch, type } from "@/lib/theme";
 
 /** Matches @livekit/components-core's TrackReference, which VideoTrack expects. */
@@ -103,6 +104,7 @@ export function LiveCall() {
     role: string;
   }>();
 
+  const { t } = useT();
   const isDoctor = params.role === "doctor";
   const room = useMemo(() => new Room({ adaptiveStream: true }), []);
   // Guards against ending the consultation twice (button plus unmount).
@@ -201,15 +203,13 @@ export function LiveCall() {
         const micAllowed = await requestAndroidPermissions();
         if (!micAllowed) {
           if (!cancelled) {
-            setError(
-              "Microphone permission is needed for a consultation. Allow it and try again.",
-            );
+            setError(translate("call.live.micPermission"));
           }
           return;
         }
 
         if (!params.token || !params.serverUrl) {
-          if (!cancelled) setError("This call link is incomplete.");
+          if (!cancelled) setError(translate("call.live.incompleteLink"));
           return;
         }
 
@@ -223,7 +223,7 @@ export function LiveCall() {
           setError(
             caught instanceof Error
               ? caught.message
-              : "Could not join the consultation.",
+              : translate("call.live.joinFailed"),
           );
         }
       }
@@ -276,21 +276,23 @@ export function LiveCall() {
 
   const connected = connection === ConnectionState.Connected;
   const statusLine = error
-    ? "Call failed"
+    ? t("call.live.failed")
     : connection === ConnectionState.Connecting
-      ? "Connecting..."
+      ? t("call.live.connecting")
       : connection === ConnectionState.Reconnecting
-        ? "Reconnecting..."
+        ? t("call.live.reconnecting")
         : !connected
-          ? "Disconnected"
+          ? t("call.live.disconnected")
           : peerJoined
-            ? "Connected"
-            : `Waiting for ${params.peerName || "the other person"} to join...`;
+            ? t("call.live.connected")
+            : t("call.live.waitingFor", {
+                name: params.peerName || t("call.live.otherPerson"),
+              });
 
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.peerName}>{params.peerName || "Consultation"}</Text>
+        <Text style={styles.peerName}>{params.peerName || t("call.live.consultation")}</Text>
         <View style={styles.statusRow}>
           {!connected && !error ? (
             <ActivityIndicator size="small" color={colors.inverseOnSurface} />
@@ -315,9 +317,7 @@ export function LiveCall() {
               </Text>
             </View>
             <Text style={styles.placeholderText}>
-              {peerJoined
-                ? "Camera is off - audio only"
-                : "Waiting for them to join"}
+              {peerJoined ? t("call.live.cameraOff") : t("call.live.waitingThem")}
             </Text>
           </View>
         )}
@@ -335,18 +335,23 @@ export function LiveCall() {
 
       <View style={styles.controls}>
         <ControlButton
-          label={micOn ? "Mute" : "Unmute"}
+          label={micOn ? t("call.live.mute") : t("call.live.unmute")}
           icon={micOn ? "mic" : "mic_off"}
           active={micOn}
           onPress={toggleMic}
         />
         <ControlButton
-          label={cameraOn ? "Stop video" : "Start video"}
+          label={cameraOn ? t("call.live.stopVideo") : t("call.live.startVideo")}
           icon={cameraOn ? "videocam" : "videocam_off"}
           active={cameraOn}
           onPress={toggleCamera}
         />
-        <ControlButton label="End" icon="call_end" danger onPress={() => leave(true)} />
+        <ControlButton
+          label={t("call.live.end")}
+          icon="call_end"
+          danger
+          onPress={() => leave(true)}
+        />
       </View>
     </SafeAreaView>
   );

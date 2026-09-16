@@ -7,6 +7,7 @@ import {
   isoDateInDays,
   isValidIsoDate,
 } from "@/lib/format";
+import { TranslationKey, useT } from "@/lib/i18n";
 import { colors, radius, spacing, touch, type } from "@/lib/theme";
 
 /**
@@ -21,22 +22,23 @@ import { colors, radius, spacing, touch, type } from "@/lib/theme";
  * the whole form in one place. It validates with `isValidIsoDate` before saving.
  */
 
-const PRESETS: { label: string; days: number }[] = [
-  { label: "In 3 days", days: 3 },
-  { label: "In 1 week", days: 7 },
-  { label: "In 2 weeks", days: 14 },
-  { label: "In 1 month", days: 30 },
+const PRESETS: { label: TranslationKey; days: number }[] = [
+  { label: "dueDate.in3Days", days: 3 },
+  { label: "dueDate.in1Week", days: 7 },
+  { label: "dueDate.in2Weeks", days: 14 },
+  { label: "dueDate.in1Month", days: 30 },
 ];
 
 export function DueDateField({
   value,
   onChange,
-  label = "Follow-up due date (optional)",
+  label,
 }: {
   value: string;
   onChange: (next: string) => void;
   label?: string;
 }) {
+  const { t } = useT();
   const trimmed = value.trim();
   const valid = trimmed.length > 0 && isValidIsoDate(trimmed);
   const invalid = trimmed.length > 0 && !valid;
@@ -45,7 +47,7 @@ export function DueDateField({
     <View style={styles.field}>
       <View style={styles.labelRow}>
         <Icon name="event" size={20} color={colors.doctor} />
-        <Text style={styles.label}>{label}</Text>
+        <Text style={styles.label}>{label ?? t("dueDate.label")}</Text>
       </View>
 
       <View style={styles.chipRow}>
@@ -61,7 +63,7 @@ export function DueDateField({
               style={[styles.chip, selected && styles.chipSelected]}
             >
               <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                {preset.label}
+                {t(preset.label)}
               </Text>
             </Pressable>
           );
@@ -73,7 +75,7 @@ export function DueDateField({
             style={styles.chip}
           >
             <Icon name="close" size={16} color={colors.warning} />
-            <Text style={styles.clearText}>Clear</Text>
+            <Text style={styles.clearText}>{t("common.clear")}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -81,7 +83,7 @@ export function DueDateField({
       <TextInput
         value={value}
         onChangeText={onChange}
-        placeholder="Or type a date: YYYY-MM-DD"
+        placeholder={t("dueDate.placeholder")}
         placeholderTextColor={colors.faint}
         autoCapitalize="none"
         autoCorrect={false}
@@ -99,12 +101,10 @@ export function DueDateField({
         </View>
       ) : invalid ? (
         <Text style={styles.error}>
-          Use the format YYYY-MM-DD, for example {isoDateInDays(7)}.
+          {t("dueDate.formatError", { example: isoDateInDays(7) })}
         </Text>
       ) : (
-        <Text style={styles.hint}>
-          Leave empty if this patient needs no scheduled check-in.
-        </Text>
+        <Text style={styles.hint}>{t("dueDate.hint")}</Text>
       )}
     </View>
   );

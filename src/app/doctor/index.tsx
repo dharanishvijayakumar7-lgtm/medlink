@@ -14,20 +14,22 @@ import {
 } from "@/components/ui";
 import { api, Facility } from "@/lib/api";
 import { useDoctorSession } from "@/lib/doctor-session";
+import { TranslationKey, useT } from "@/lib/i18n";
 import { colors, radius, spacing, type } from "@/lib/theme";
 
-const SPECIALIZATIONS = [
-  "General Medicine",
-  "Obstetrics & Gynaecology",
-  "Paediatrics",
-  "Community Medicine",
-  "Surgery",
-  "Other",
-] as const;
+/** Saved in English; the chips show a translated label. */
+const SPECIALIZATIONS: Record<string, TranslationKey> = {
+  "General Medicine": "doctorSignIn.specGeneral",
+  "Obstetrics & Gynaecology": "doctorSignIn.specObgyn",
+  Paediatrics: "doctorSignIn.specPaeds",
+  "Community Medicine": "doctorSignIn.specCommunity",
+  Surgery: "doctorSignIn.specSurgery",
+  Other: "gender.other",
+};
 
-const ASSURANCES: { icon: string; title: string; caption: string }[] = [
-  { icon: "lock", title: "EHR Encrypted", caption: "Records stay on your server" },
-  { icon: "sync_alt", title: "Rural Tele-Sync", caption: "Works on weak links" },
+const ASSURANCES: { icon: string; title: TranslationKey; caption: TranslationKey }[] = [
+  { icon: "lock", title: "doctorSignIn.ehrTitle", caption: "doctorSignIn.ehrCaption" },
+  { icon: "sync_alt", title: "doctorSignIn.syncTitle", caption: "doctorSignIn.syncCaption" },
 ];
 
 /**
@@ -38,6 +40,7 @@ const ASSURANCES: { icon: string; title: string; caption: string }[] = [
 export default function DoctorIdentity() {
   const router = useRouter();
   const { setDoctor } = useDoctorSession();
+  const { t } = useT();
 
   const [name, setName] = useState("");
   const [specialization, setSpecialization] = useState<string | null>(
@@ -69,11 +72,11 @@ export default function DoctorIdentity() {
 
   async function handleSubmit() {
     if (!name.trim()) {
-      setError("Please enter your name.");
+      setError(t("doctorSignIn.errorName"));
       return;
     }
     if (!resolved) {
-      setError("Please enter your specialization.");
+      setError(t("doctorSignIn.errorSpec"));
       return;
     }
 
@@ -88,7 +91,7 @@ export default function DoctorIdentity() {
       setDoctor(doctor);
       router.replace("/doctor/queue");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Something went wrong.");
+      setError(caught instanceof Error ? caught.message : t("common.somethingWrong"));
     } finally {
       setSubmitting(false);
     }
@@ -100,17 +103,13 @@ export default function DoctorIdentity() {
         <View style={styles.topRow}>
           <View style={styles.verifiedPill}>
             <Icon name="verified_user" size={16} color={colors.onSecondaryContainer} />
-            <Text style={styles.verifiedText}>Verified Clinical Network</Text>
+            <Text style={styles.verifiedText}>{t("role.trust")}</Text>
           </View>
-          <Text style={styles.stepText}>Step 1 of 1</Text>
+          <Text style={styles.stepText}>{t("doctorSignIn.step")}</Text>
         </View>
 
-        <Text style={styles.title}>Physician Portal Onboarding</Text>
-        <Text style={styles.body}>
-          Identify yourself to access the patient queue, triage telemetry and
-          clinical notes. No password in this build - this tags the notes you
-          write, and the session ends when you close the app.
-        </Text>
+        <Text style={styles.title}>{t("doctorSignIn.title")}</Text>
+        <Text style={styles.body}>{t("doctorSignIn.body")}</Text>
 
         <View style={styles.assuranceGrid}>
           {ASSURANCES.map((item) => (
@@ -119,11 +118,11 @@ export default function DoctorIdentity() {
                 <Icon name={item.icon} size={18} color={colors.onDoctor} />
               </View>
               <View style={styles.assuranceBody}>
-                <Text style={styles.assuranceTitle} numberOfLines={1}>
-                  {item.title}
+                <Text style={styles.assuranceTitle} numberOfLines={2}>
+                  {t(item.title)}
                 </Text>
-                <Text style={styles.assuranceCaption} numberOfLines={1}>
-                  {item.caption}
+                <Text style={styles.assuranceCaption} numberOfLines={2}>
+                  {t(item.caption)}
                 </Text>
               </View>
             </View>
@@ -135,43 +134,44 @@ export default function DoctorIdentity() {
 
       <Card style={styles.formCard}>
         <TextField
-          label="Full Practitioner Name"
+          label={t("doctorSignIn.name")}
           labelIcon="badge"
           value={name}
           onChangeText={setName}
-          placeholder="e.g. Anita Sharma"
+          placeholder={t("doctorSignIn.namePlaceholder")}
           autoCapitalize="words"
-          hint="As inscribed in the State or National Medical Register."
+          hint={t("doctorSignIn.nameHint")}
         />
         <ChoiceChips
-          label="Specialization"
-          options={SPECIALIZATIONS}
+          label={t("doctorSignIn.specialization")}
+          options={Object.keys(SPECIALIZATIONS)}
           value={specialization}
           onChange={setSpecialization}
           tone="doctor"
+          optionLabel={(option) => t(SPECIALIZATIONS[option] ?? option)}
         />
         {specialization === "Other" ? (
           <TextField
-            label="Specialization"
+            label={t("doctorSignIn.specialization")}
             labelIcon="clinical_notes"
             value={customSpecialization}
             onChangeText={setCustomSpecialization}
-            placeholder="Enter your specialization"
+            placeholder={t("doctorSignIn.specPlaceholder")}
             autoCapitalize="words"
           />
         ) : null}
         <FacilityPicker
-          label="Your facility (optional)"
+          label={t("doctorSignIn.facility")}
           facilities={facilities}
           selectedId={facilityId}
           onSelect={setFacilityId}
-          emptyLabel="Not attached to a facility"
-          hint="Sets the default facility whose stock and dashboard you manage."
+          emptyLabel={t("doctorSignIn.noFacility")}
+          hint={t("doctorSignIn.facilityHint")}
         />
       </Card>
 
       <Button
-        title="Start session"
+        title={t("doctorSignIn.start")}
         icon="login"
         onPress={handleSubmit}
         loading={submitting}

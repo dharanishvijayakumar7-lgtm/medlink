@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Icon } from "@/components/icon";
+import { LANGUAGES, LanguageCode, useT } from "@/lib/i18n";
 import { colors, elevation, radius, spacing, type } from "@/lib/theme";
 
 type RoleCardProps = {
@@ -53,50 +54,106 @@ function RoleCard({
   );
 }
 
-/** First screen on launch: choose a role. No fields, no accounts. */
+/**
+ * Language chips, each written in its own script so a patient can find theirs
+ * without reading English. The English name sits underneath for staff.
+ */
+function LanguagePicker({
+  value,
+  onChange,
+  label,
+}: {
+  value: LanguageCode;
+  onChange: (code: LanguageCode) => void;
+  label: string;
+}) {
+  return (
+    <View style={styles.languages}>
+      <View style={styles.languageHeader}>
+        <Icon name="translate" size={20} color={colors.patient} />
+        <Text style={styles.languageLabel}>{label}</Text>
+      </View>
+      <View style={styles.languageGrid} accessibilityRole="radiogroup">
+        {LANGUAGES.map((language) => {
+          const selected = language.code === value;
+          return (
+            <Pressable
+              key={language.code}
+              accessibilityRole="radio"
+              accessibilityState={{ selected }}
+              accessibilityLabel={`${language.native}, ${language.english}`}
+              onPress={() => onChange(language.code)}
+              style={({ pressed }) => [
+                styles.languageChip,
+                selected && styles.languageChipOn,
+                pressed && styles.pressed,
+              ]}
+            >
+              <Text style={[styles.languageNative, selected && styles.languageTextOn]}>
+                {language.native}
+              </Text>
+              {language.code === "en" ? null : (
+                <Text style={[styles.languageEnglish, selected && styles.languageTextOn]}>
+                  {language.english}
+                </Text>
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+/** First screen on launch: choose a language, then a role. No fields, no accounts. */
 export default function RoleSelect() {
   const router = useRouter();
+  const { t, language, setLanguage } = useT();
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.trustPill}>
           <Icon name="verified_user" size={18} color={colors.patient} />
-          <Text style={styles.trustText}>Verified Clinical Network</Text>
+          <Text style={styles.trustText}>{t("role.trust")}</Text>
         </View>
 
         <View style={styles.header}>
           <View style={styles.headerRow}>
             <Icon name="health_and_safety" size={32} color={colors.patient} />
-            <Text style={styles.brand}>Welcome to MedLink</Text>
+            <Text style={styles.brand}>{t("role.welcome")}</Text>
           </View>
-          <Text style={styles.tagline}>Choose how you are using the app today</Text>
+          <Text style={styles.tagline}>{t("role.tagline")}</Text>
         </View>
 
+        <LanguagePicker
+          value={language}
+          onChange={setLanguage}
+          label={t("role.chooseLanguage")}
+        />
+
         <View style={styles.banner}>
-          <Text style={styles.bannerLabel}>SAFE &amp; CONFIDENTIAL</Text>
-          <Text style={styles.bannerText}>
-            Fast access to diagnosis, telemedicine &amp; local care
-          </Text>
+          <Text style={styles.bannerLabel}>{t("role.bannerLabel")}</Text>
+          <Text style={styles.bannerText}>{t("role.bannerText")}</Text>
         </View>
 
         <View style={styles.roles} accessibilityRole="radiogroup">
           <RoleCard
             icon="person"
-            title="I am a Patient"
-            description="Check symptoms, view records, find clinics"
+            title={t("role.patientTitle")}
+            description={t("role.patientDescription")}
             footnoteIcon="mic"
-            footnote="Voice and regional guidance enabled"
+            footnote={t("role.patientFootnote")}
             accent={colors.patient}
             tileBackground={colors.patientTint}
             onPress={() => router.push("/patient")}
           />
           <RoleCard
             icon="stethoscope"
-            title="I am a Doctor"
-            description="View patient queue, triage list & clinical notes"
+            title={t("role.doctorTitle")}
+            description={t("role.doctorDescription")}
             footnoteIcon="clinical_notes"
-            footnote="Clinical telemetry and rapid EHR access"
+            footnote={t("role.doctorFootnote")}
             accent={colors.doctor}
             tileBackground={colors.doctorTint}
             onPress={() => router.push("/doctor")}
@@ -106,10 +163,8 @@ export default function RoleSelect() {
         <View style={styles.sunlight}>
           <Icon name="sunny" size={24} color={colors.faint} />
           <View style={styles.sunlightBody}>
-            <Text style={styles.sunlightTitle}>High Outdoor Sunlight Mode Active</Text>
-            <Text style={styles.sunlightText} numberOfLines={1}>
-              Colors calibrated for glare and low-bandwidth connections
-            </Text>
+            <Text style={styles.sunlightTitle}>{t("role.sunlightTitle")}</Text>
+            <Text style={styles.sunlightText}>{t("role.sunlightText")}</Text>
           </View>
         </View>
       </ScrollView>
@@ -142,6 +197,30 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   brand: { ...type.headlineXlMobile, color: colors.text, flex: 1 },
   tagline: { ...type.bodyXl, color: colors.muted },
+
+  languages: { gap: spacing.sm, marginBottom: spacing.lg },
+  languageHeader: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  languageLabel: { ...type.labelLg, color: colors.text },
+  languageGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
+  languageChip: {
+    ...elevation.level1,
+    // Three to a row on a phone, each still a large tap target.
+    flexBasis: "30%",
+    flexGrow: 1,
+    minHeight: 64,
+    borderRadius: radius.md,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  languageChipOn: {
+    backgroundColor: colors.patient,
+    borderColor: colors.patient,
+  },
+  languageNative: { ...type.headlineMd, color: colors.text, textAlign: "center" },
+  languageEnglish: { ...type.labelMd, color: colors.muted, textAlign: "center" },
+  languageTextOn: { color: colors.onPatient },
 
   // The mockup's photo is a temporary Stitch asset URL, so the banner keeps the
   // layout and copy on the tint the gradient resolves to behind the text.
@@ -190,7 +269,7 @@ const styles = StyleSheet.create({
   },
   roleDescription: { ...type.bodyMd, color: colors.muted },
   roleFootnote: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  roleFootnoteText: { ...type.labelMd },
+  roleFootnoteText: { ...type.labelMd, flex: 1 },
 
   sunlight: {
     flexDirection: "row",
@@ -203,5 +282,6 @@ const styles = StyleSheet.create({
   },
   sunlightBody: { flex: 1, gap: 2 },
   sunlightTitle: { ...type.labelMd, color: colors.text },
+  // Wraps rather than truncating: Tamil and Malayalam run much longer.
   sunlightText: { ...type.labelMd, color: colors.muted },
 });

@@ -15,17 +15,19 @@ import {
 } from "@/components/ui";
 import { api, DocumentStatus, isDocumentInFlight, MedicalDocument } from "@/lib/api";
 import { formatIsoDate, timeAgo } from "@/lib/format";
+import { translate, TranslationKey, useT } from "@/lib/i18n";
 import { usePatientSession } from "@/lib/patient-session";
 import { colors, elevation, radius, spacing, type } from "@/lib/theme";
+import { useTranslated } from "@/lib/use-translated";
 
 /** How often to check on documents still being read. */
 const POLL_MS = 4_000;
 
-const STATUS_META: Record<DocumentStatus, { label: string; tone: Tone }> = {
-  PENDING: { label: "ANALYZING", tone: "patient" },
-  PROCESSING: { label: "ANALYZING", tone: "patient" },
-  DONE: { label: "READY", tone: "success" },
-  FAILED: { label: "COULD NOT READ", tone: "warning" },
+const STATUS_META: Record<DocumentStatus, { label: TranslationKey; tone: Tone }> = {
+  PENDING: { label: "documents.analyzing", tone: "patient" },
+  PROCESSING: { label: "documents.analyzing", tone: "patient" },
+  DONE: { label: "documents.ready", tone: "success" },
+  FAILED: { label: "timeline.couldNotRead", tone: "warning" },
 };
 
 function DocumentCard({
@@ -35,8 +37,15 @@ function DocumentCard({
   document: MedicalDocument;
   onPress: () => void;
 }) {
+  const { t } = useT();
   const meta = STATUS_META[document.status];
   const inFlight = isDocumentInFlight(document);
+  const {
+    texts: [failure, summary],
+  } = useTranslated([
+    document.failure_reason ?? "",
+    document.extracted_summary?.plain_summary ?? "",
+  ]);
 
   return (
     <Pressable
@@ -54,26 +63,27 @@ function DocumentCard({
           </Text>
           <Text style={styles.cardMeta}>
             {document.visit_date
-              ? `Visit ${formatIsoDate(document.visit_date)}`
-              : "Visit date not known"}
-            {" · "}uploaded {timeAgo(document.uploaded_at)}
+              ? t("document.visit", { date: formatIsoDate(document.visit_date) })
+              : t("document.visitUnknown")}
+            {" · "}
+            {t("documents.uploaded", { time: timeAgo(document.uploaded_at) })}
           </Text>
         </View>
         <Icon name="chevron_right" size={24} color={colors.faint} />
       </View>
 
-      <SoftBadge label={meta.label} tone={meta.tone} />
+      <SoftBadge label={t(meta.label)} tone={meta.tone} />
 
       {inFlight ? (
         <View style={styles.inFlightRow}>
           <ActivityIndicator size="small" color={colors.patient} />
-          <Text style={styles.inFlightText}>Analyzing your document...</Text>
+          <Text style={styles.inFlightText}>{t("document.analyzing")}</Text>
         </View>
       ) : document.status === "FAILED" ? (
-        <Text style={styles.failedText}>{document.failure_reason}</Text>
+        <Text style={styles.failedText}>{failure}</Text>
       ) : document.extracted_summary ? (
         <Text style={styles.summaryText} numberOfLines={2}>
-          {document.extracted_summary.plain_summary}
+          {summary}
         </Text>
       ) : null}
     </Pressable>
@@ -83,6 +93,7 @@ function DocumentCard({
 export default function MyDocuments() {
   const router = useRouter();
   const { session } = usePatientSession();
+  const { t } = useT();
   const code = session?.unique_code ?? "";
 
   const [documents, setDocuments] = useState<MedicalDocument[]>([]);
@@ -96,7 +107,7 @@ export default function MyDocuments() {
       setDocuments(await api.listDocuments(code));
       setError(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not load your documents.");
+      setError(caught instanceof Error ? caught.message : translate("documents.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -122,7 +133,7 @@ export default function MyDocuments() {
   }, [anyInFlight, fetchDocuments]);
 
   if (loading && documents.length === 0) {
-    return <Loading label="Loading your documents..." />;
+    return <Loading label={t("documents.loading")} />;
   }
 
   const anyReady = documents.some((document) => document.status === "DONE");
@@ -134,24 +145,18 @@ export default function MyDocuments() {
           <Icon name="description" size={24} color={colors.onPatient} />
         </View>
         <View style={styles.headerBody}>
-          <Text style={styles.headerTitle}>My Documents</Text>
-          <Text style={styles.headerSubtitle}>
-            Records from other hospitals and clinics
-          </Text>
+          <Text style={styles.headerTitle}>{t("home.documentsTitle")}</Text>
+          <Text style={styles.headerSubtitle}>{t("documents.subtitle")}</Text>
         </View>
       </View>
 
       <View style={styles.explainer}>
         <Icon name="menu_book" size={22} color={colors.patient} />
-        <Text style={styles.explainerText}>
-          Upload a discharge summary, prescription or lab report and MedLink
-          explains it in simple words. These stay separate from My Record - your
-          doctor sees both together.
-        </Text>
+        <Text style={styles.explainerText}>{t("documents.explainer")}</Text>
       </View>
 
       <Button
-        title="Upload a record"
+        title={t("nav.patient.upload")}
         icon="upload_file"
         onPress={() => router.push("/patient/documents/upload")}
         tone="patient"
@@ -160,14 +165,15 @@ export default function MyDocuments() {
       {error ? <ErrorBanner message={error} onRetry={refresh} /> : null}
 
       {anyReady ? (
+        // Compact: only the translated lead line is shown.
         <DocumentDisclaimer text={documents[0].disclaimer} compact />
       ) : null}
 
       {documents.length === 0 ? (
         <EmptyState
           icon="upload_file"
-          title="No documents yet"
-          body="Upload a record from any hospital visit - one document for each visit."
+          title={t("documents.emptyTitle")}
+          body={t("documents.emptyBody")}
         />
       ) : (
         documents.map((document) => (

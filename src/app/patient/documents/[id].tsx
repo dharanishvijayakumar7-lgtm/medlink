@@ -13,7 +13,9 @@ import {
   MedicalDocument,
 } from "@/lib/api";
 import { formatFileSize, formatIsoDate } from "@/lib/format";
+import { translate, useT } from "@/lib/i18n";
 import { colors, elevation, radius, spacing, type } from "@/lib/theme";
+import { regroup, useTranslated } from "@/lib/use-translated";
 
 const POLL_MS = 3_000;
 
@@ -38,7 +40,17 @@ function Section({
 }
 
 /** A lab value outside its range, explained - never just the raw lab term. */
-function LabCard({ finding, direction }: { finding: LabFinding; direction: "low" | "high" }) {
+function LabCard({
+  finding,
+  direction,
+  explanation,
+}: {
+  finding: LabFinding;
+  direction: "low" | "high";
+  /** The plain explanation in the app's language. */
+  explanation: string;
+}) {
+  const { t } = useT();
   return (
     <View style={styles.labCard}>
       <View style={styles.labHead}>
@@ -48,10 +60,12 @@ function LabCard({ finding, direction }: { finding: LabFinding; direction: "low"
           color={colors.warning}
         />
         <Text style={styles.labTest}>{finding.test}</Text>
-        <Text style={styles.labFlag}>{direction === "low" ? "LOW" : "HIGH"}</Text>
+        <Text style={styles.labFlag}>
+          {direction === "low" ? t("document.low") : t("document.high")}
+        </Text>
       </View>
       {finding.value ? <Text style={styles.labValue}>{finding.value}</Text> : null}
-      <Text style={styles.labExplanation}>{finding.plain_explanation}</Text>
+      <Text style={styles.labExplanation}>{explanation}</Text>
     </View>
   );
 }
@@ -60,6 +74,7 @@ export default function DocumentDetail() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const documentId = Number(id);
+  const { t } = useT();
 
   const [document, setDocument] = useState<MedicalDocument | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +87,7 @@ export default function DocumentDetail() {
       setDocument(await api.getDocument(documentId));
       setError(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not load this document.");
+      setError(caught instanceof Error ? caught.message : translate("document.loadFailed"));
     }
   }, [documentId]);
 
@@ -95,9 +110,44 @@ export default function DocumentDetail() {
     try {
       await Linking.openURL(documentFileUrl(document));
     } catch {
-      setOpenError("Could not open the PDF on this phone.");
+      setOpenError(translate("document.openFailed"));
     }
   }
+
+  // Gemini writes these in English. Medicine names, doses, lab names and
+  // values are never machine-translated: a wrong word or number there is
+  // dangerous.
+  const summaryData = document?.status === "DONE" ? document.extracted_summary : null;
+  const single = [
+    document?.disclaimer ?? "",
+    document?.failure_reason ?? "",
+    summaryData?.plain_summary ?? "",
+    summaryData?.suggested_next_steps ?? "",
+  ];
+  const symptomItems = summaryData?.symptoms ?? [];
+  const lowItems = (summaryData?.deficiencies ?? []).map((f) => f.plain_explanation);
+  const highItems = (summaryData?.excesses ?? []).map((f) => f.plain_explanation);
+  const termItems = (summaryData?.key_terms ?? []).map((term) => term.explanation);
+  const { texts: translated } = useTranslated([
+    ...single,
+    ...symptomItems,
+    ...lowItems,
+    ...highItems,
+    ...termItems,
+  ]);
+  const [
+    [shownDisclaimer, shownFailure, shownSummary, shownNextSteps],
+    shownSymptoms,
+    shownLow,
+    shownHigh,
+    shownTerms,
+  ] = regroup(translated, [
+    single.length,
+    symptomItems.length,
+    lowItems.length,
+    highItems.length,
+    termItems.length,
+  ]);
 
   if (!document) {
     return error ? (
@@ -105,7 +155,7 @@ export default function DocumentDetail() {
         <ErrorBanner message={error} onRetry={fetchDocument} />
       </Screen>
     ) : (
-      <Loading label="Loading document..." />
+      <Loading label={t("document.loading")} />
     );
   }
 
@@ -121,12 +171,12 @@ export default function DocumentDetail() {
         </View>
         <View style={styles.headerBody}>
           <Text style={styles.hospital}>
-            {document.hospital_name ?? "Hospital not named"}
+            {document.hospital_name ?? t("document.hospitalUnknown")}
           </Text>
           <Text style={styles.meta}>
             {document.visit_date
-              ? `Visit ${formatIsoDate(document.visit_date)}`
-              : "Visit date not known"}
+              ? t("document.visit", { date: formatIsoDate(document.visit_date) })
+              : t("document.visitUnknown")}
           </Text>
           <Text style={styles.meta} numberOfLines={1}>
             {document.original_filename} · {formatFileSize(document.file_size)}
@@ -137,21 +187,18 @@ export default function DocumentDetail() {
       {inFlight ? (
         <View style={styles.analyzing}>
           <ActivityIndicator size="large" color={colors.patient} />
-          <Text style={styles.analyzingTitle}>Analyzing your document...</Text>
-          <Text style={styles.analyzingBody}>
-            MedLink is reading it and writing a simple explanation. This can take up
-            to a minute. You can leave this screen - it will keep working.
-          </Text>
+          <Text style={styles.analyzingTitle}>{t("document.analyzing")}</Text>
+          <Text style={styles.analyzingBody}>{t("document.analyzingBody")}</Text>
         </View>
       ) : null}
 
       {document.status === "FAILED" ? (
         <View style={styles.failed}>
           <Icon name="error_outline" size={32} color={colors.warning} />
-          <Text style={styles.failedTitle}>We could not read this document</Text>
-          <Text style={styles.failedBody}>{document.failure_reason}</Text>
+          <Text style={styles.failedTitle}>{t("document.failedTitle")}</Text>
+          <Text style={styles.failedBody}>{shownFailure}</Text>
           <Button
-            title="Upload another record"
+            title={t("document.uploadAnother")}
             icon="upload_file"
             onPress={() => router.replace("/patient/documents/upload")}
             tone="patient"
@@ -161,16 +208,16 @@ export default function DocumentDetail() {
 
       {document.status === "DONE" && summary ? (
         <>
-          <DocumentDisclaimer text={document.disclaimer} />
+          <DocumentDisclaimer text={shownDisclaimer} />
 
-          <Section icon="auto_awesome" title="In simple words">
-            <Text style={styles.body}>{summary.plain_summary}</Text>
+          <Section icon="auto_awesome" title={t("callDetail.simpleWords")}>
+            <Text style={styles.body}>{shownSummary}</Text>
           </Section>
 
           {summary.symptoms.length > 0 ? (
-            <Section icon="sick" title="Symptoms noted">
-              {summary.symptoms.map((symptom) => (
-                <View key={symptom} style={styles.bulletRow}>
+            <Section icon="sick" title={t("document.symptoms")}>
+              {shownSymptoms.map((symptom, index) => (
+                <View key={`${symptom}-${index}`} style={styles.bulletRow}>
                   <View style={styles.bullet} />
                   <Text style={styles.bulletText}>{symptom}</Text>
                 </View>
@@ -179,7 +226,7 @@ export default function DocumentDetail() {
           ) : null}
 
           {summary.medications.length > 0 ? (
-            <Section icon="medication" title="Medicines and treatment">
+            <Section icon="medication" title={t("document.medicines")}>
               {summary.medications.map((medication, index) => (
                 <View key={`${medication.name}-${index}`} style={styles.medRow}>
                   <Text style={styles.medName}>{medication.name}</Text>
@@ -192,40 +239,47 @@ export default function DocumentDetail() {
           ) : null}
 
           {summary.deficiencies.length > 0 || summary.excesses.length > 0 ? (
-            <Section icon="science" title="Test results outside the normal range">
+            <Section icon="science" title={t("document.labs")}>
               {summary.deficiencies.map((finding, index) => (
-                <LabCard key={`low-${index}`} finding={finding} direction="low" />
+                <LabCard
+                  key={`low-${index}`}
+                  finding={finding}
+                  direction="low"
+                  explanation={shownLow[index]}
+                />
               ))}
               {summary.excesses.map((finding, index) => (
-                <LabCard key={`high-${index}`} finding={finding} direction="high" />
+                <LabCard
+                  key={`high-${index}`}
+                  finding={finding}
+                  direction="high"
+                  explanation={shownHigh[index]}
+                />
               ))}
             </Section>
           ) : null}
 
           {summary.key_terms.length > 0 ? (
-            <Section icon="menu_book" title="Medical words explained">
+            <Section icon="menu_book" title={t("document.terms")}>
               {summary.key_terms.map((term, index) => (
                 <View key={`${term.term}-${index}`} style={styles.termRow}>
                   <Text style={styles.term}>{term.term}</Text>
-                  <Text style={styles.termExplanation}>{term.explanation}</Text>
+                  <Text style={styles.termExplanation}>{shownTerms[index]}</Text>
                 </View>
               ))}
             </Section>
           ) : null}
 
-          <Section icon="lightbulb" title="What this might mean for you">
-            <Text style={styles.body}>{summary.suggested_next_steps}</Text>
-            <Text style={styles.notDiagnosis}>
-              This is general guidance, not a diagnosis. Only a doctor can tell you
-              what is right for you.
-            </Text>
+          <Section icon="lightbulb" title={t("document.meaning")}>
+            <Text style={styles.body}>{shownNextSteps}</Text>
+            <Text style={styles.notDiagnosis}>{t("document.notDiagnosis")}</Text>
           </Section>
         </>
       ) : null}
 
       {openError ? <ErrorBanner message={openError} /> : null}
       <Button
-        title="Open the original PDF"
+        title={t("document.openPdf")}
         icon="open_in_new"
         onPress={openOriginal}
         tone="patient"

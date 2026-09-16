@@ -3,10 +3,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.ages import age_on, today
 from app.database import get_db
 from app.models import ConsultationNote, Doctor, Facility, Patient, TriageEntry
 from app.queries import create_patient as allocate_patient, load_patient, queue_position
 from app.timeline import build_timeline
+from app.triage_assessment import assess
 from app.schemas import (
     ConsultationNoteCreate,
     ConsultationNoteOut,
@@ -79,15 +81,25 @@ def list_patient_referrals(
 def add_triage_entry(
     unique_code: str, payload: TriageEntryCreate, db: Session = Depends(get_db)
 ) -> TriageEntry:
-    """Save one completed symptom check against the patient's record."""
+    """Save one completed symptom check and return it with its result.
+
+    The answers are committed before the assessment runs, so a Gemini failure
+    or timeout never loses them. The assessment itself never raises.
+    """
     patient = load_patient(db, unique_code)
-    answers = [answer.model_dump() for answer in payload.answers]
+    answers = [answer.model_dump(exclude_none=True) for answer in payload.answers]
     summary = payload.summary or "; ".join(
         f"{answer['question']}: {answer['answer']}" for answer in answers
     )
 
     entry = TriageEntry(patient_id=patient.id, summary=summary, answers=answers)
     db.add(entry)
+    db.commit()
+
+    age = age_on(patient.date_of_birth, today())
+    assessment = assess(answers, age.label if age else None, patient.gender)
+    entry.urgency = assessment["urgency"]
+    entry.assessment = assessment
     db.commit()
     db.refresh(entry)
     return entry

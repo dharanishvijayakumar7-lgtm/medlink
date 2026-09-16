@@ -156,6 +156,10 @@ class TriageEntry(Base):
     )
     # "app" or "voice_call" - where this triage came from.
     source: Mapped[str] = mapped_column(String(20), default=TriageSource.APP, index=True)
+    # The result shown to the patient after an in-app symptom check (English).
+    # Null for voice-agent entries and for entries saved before it existed.
+    urgency: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    assessment: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, index=True
     )

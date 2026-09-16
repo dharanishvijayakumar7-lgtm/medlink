@@ -13,6 +13,8 @@ import {
   TextField,
 } from "@/components/ui";
 import { api } from "@/lib/api";
+import { genderLabel, languageLabel } from "@/lib/format";
+import { languageInfo, useT } from "@/lib/i18n";
 import { usePatientSession } from "@/lib/patient-session";
 import { colors, radius, spacing, touch, type } from "@/lib/theme";
 
@@ -22,7 +24,7 @@ const GENDERS = [
   { value: "Other", icon: "person" },
 ] as const;
 
-/** Stored as-is for now; translation of the app itself is a later part. */
+/** Saved in English; the chips show each name in the app's language. */
 const LANGUAGES = [
   "Hindi",
   "English",
@@ -32,6 +34,7 @@ const LANGUAGES = [
   "Tamil",
   "Gujarati",
   "Kannada",
+  "Malayalam",
   "Odia",
   "Punjabi",
 ] as const;
@@ -39,6 +42,7 @@ const LANGUAGES = [
 export default function PatientRegister() {
   const router = useRouter();
   const { identify } = usePatientSession();
+  const { t, language: appLanguage } = useT();
 
   const [name, setName] = useState("");
   // ISO YYYY-MM-DD. Replaces the old typed age: the server derives age from it.
@@ -46,20 +50,23 @@ export default function PatientRegister() {
   const [gender, setGender] = useState<string | null>(null);
   const [phone, setPhone] = useState("");
   const [village, setVillage] = useState("");
-  const [language, setLanguage] = useState<string | null>("Hindi");
+  // Starts on the language picked on the first screen.
+  const [language, setLanguage] = useState<string | null>(
+    languageInfo(appLanguage).english,
+  );
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function validate(): string | null {
-    if (!name.trim()) return "Please enter the patient's name.";
-    if (!dateOfBirth) return "Please choose the patient's date of birth.";
-    if (!gender) return "Please select a gender.";
+    if (!name.trim()) return t("register.errorName");
+    if (!dateOfBirth) return t("register.errorDob");
+    if (!gender) return t("register.errorGender");
     if (phone.replace(/\D/g, "").length < 10) {
-      return "Please enter a 10-digit phone number.";
+      return t("register.errorPhone");
     }
-    if (!village.trim()) return "Please enter your village or area.";
-    if (!language) return "Please select a preferred language.";
+    if (!village.trim()) return t("register.errorVillage");
+    if (!language) return t("register.errorLanguage");
     return null;
   }
 
@@ -85,7 +92,7 @@ export default function PatientRegister() {
       await identify({ unique_code: patient.unique_code, phone: digits });
       router.replace("/patient/home");
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Something went wrong.");
+      setError(caught instanceof Error ? caught.message : t("common.somethingWrong"));
     } finally {
       setSubmitting(false);
     }
@@ -93,7 +100,7 @@ export default function PatientRegister() {
 
   return (
     <Screen>
-      <Text style={styles.sectionLabel}>PATIENT DETAILS</Text>
+      <Text style={styles.sectionLabel}>{t("register.section")}</Text>
 
       <Card>
         <View style={styles.introRow}>
@@ -101,11 +108,8 @@ export default function PatientRegister() {
             <Icon name="badge" size={28} color={colors.patient} />
           </View>
           <View style={styles.introBody}>
-            <Text style={styles.introTitle}>Basic Information</Text>
-            <Text style={styles.introText}>
-              Tap any box to fill in the patient&apos;s information. There is no
-              password - your MedLink ID is how a doctor finds you.
-            </Text>
+            <Text style={styles.introTitle}>{t("register.introTitle")}</Text>
+            <Text style={styles.introText}>{t("register.introText")}</Text>
           </View>
         </View>
       </Card>
@@ -114,21 +118,21 @@ export default function PatientRegister() {
 
       <Card style={styles.formCard}>
         <TextField
-          label="Full Name"
-          requirement="Required"
+          label={t("register.name")}
+          requirement={t("common.required")}
           value={name}
           onChangeText={setName}
-          placeholder="e.g. Sunita Devi"
+          placeholder={t("register.namePlaceholder")}
           autoCapitalize="words"
         />
         <DateOfBirthField
           value={dateOfBirth}
           onChange={setDateOfBirth}
-          requirement="Required"
+          requirement={t("common.required")}
         />
 
         <View style={styles.field}>
-          <Text style={styles.label}>Gender</Text>
+          <Text style={styles.label}>{t("register.gender")}</Text>
           <View style={styles.genderRow} accessibilityRole="radiogroup">
             {GENDERS.map((option) => {
               const selected = gender === option.value;
@@ -148,7 +152,7 @@ export default function PatientRegister() {
                   <Text
                     style={[styles.genderText, selected && styles.genderTextOn]}
                   >
-                    {option.value}
+                    {genderLabel(option.value)}
                   </Text>
                 </Pressable>
               );
@@ -157,33 +161,34 @@ export default function PatientRegister() {
         </View>
 
         <TextField
-          label="Phone number"
-          requirement="Required"
+          label={t("register.phone")}
+          requirement={t("common.required")}
           value={phone}
           onChangeText={setPhone}
-          placeholder="10-digit mobile number"
+          placeholder={t("register.phonePlaceholder")}
           keyboardType="phone-pad"
           maxLength={15}
-          hint="The voice agent matches callers by this number."
+          hint={t("register.phoneHint")}
         />
         <TextField
-          label="Village / area"
-          requirement="Required"
+          label={t("register.village")}
+          requirement={t("common.required")}
           value={village}
           onChangeText={setVillage}
-          placeholder="e.g. Ramnagar, Chandauli"
+          placeholder={t("register.villagePlaceholder")}
           autoCapitalize="words"
         />
         <ChoiceChips
-          label="Preferred language"
+          label={t("register.language")}
           options={LANGUAGES}
           value={language}
           onChange={setLanguage}
+          optionLabel={languageLabel}
         />
       </Card>
 
       <Button
-        title="Create my MedLink ID"
+        title={t("register.submit")}
         icon="badge"
         onPress={handleSubmit}
         loading={submitting}

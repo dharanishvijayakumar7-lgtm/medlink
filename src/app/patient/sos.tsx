@@ -7,6 +7,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { Icon } from "@/components/icon";
 import { Button, Card, ErrorBanner, Screen } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
+import { translate, useT } from "@/lib/i18n";
 import { colors, overlay, radius, spacing, touch, type } from "@/lib/theme";
 
 const EMERGENCY_NUMBER = "112";
@@ -14,6 +15,7 @@ const EMERGENCY_NUMBER = "112";
 type Fix = { latitude: number; longitude: number; accuracy: number | null; at: string };
 
 export default function EmergencySOS() {
+  const { t } = useT();
   const [fix, setFix] = useState<Fix | null>(null);
   const [locating, setLocating] = useState(true);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -24,9 +26,7 @@ export default function EmergencySOS() {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        setLocationError(
-          "Location permission was denied. Allow location access to read your position out on the call.",
-        );
+        setLocationError(translate("sos.permissionDenied"));
         return;
       }
       const position = await Location.getCurrentPositionAsync({
@@ -41,7 +41,7 @@ export default function EmergencySOS() {
         at: new Date(position.timestamp).toISOString(),
       });
     } catch {
-      setLocationError("Could not get your location. Check that GPS is switched on.");
+      setLocationError(translate("sos.locationFailed"));
     } finally {
       setLocating(false);
     }
@@ -63,7 +63,10 @@ export default function EmergencySOS() {
   );
 
   const locationText = fix
-    ? `Latitude ${fix.latitude.toFixed(6)}, Longitude ${fix.longitude.toFixed(6)}`
+    ? t("sos.locationText", {
+        latitude: fix.latitude.toFixed(6),
+        longitude: fix.longitude.toFixed(6),
+      })
     : "";
 
   async function copyLocation() {
@@ -80,7 +83,7 @@ export default function EmergencySOS() {
         <View style={styles.callIcon}>
           <Icon name="emergency" size={32} color={colors.onEmergency} />
         </View>
-        <Text style={styles.callLabel}>India emergency number</Text>
+        <Text style={styles.callLabel}>{t("sos.numberLabel")}</Text>
         <Text style={styles.callNumber}>{EMERGENCY_NUMBER}</Text>
         <Pressable
           accessibilityRole="button"
@@ -88,12 +91,14 @@ export default function EmergencySOS() {
           style={({ pressed }) => [styles.callButton, pressed && styles.pressed]}
         >
           <Icon name="call" size={28} color={colors.emergency} />
-          <Text style={styles.callButtonText}>Call {EMERGENCY_NUMBER} now</Text>
+          <Text style={styles.callButtonText}>
+            {t("sos.callNow", { number: EMERGENCY_NUMBER })}
+          </Text>
         </Pressable>
       </View>
 
       <Card>
-        <Text style={styles.sectionHeading}>Read this out on the call</Text>
+        <Text style={styles.sectionHeading}>{t("sos.readOut")}</Text>
 
         {locationError ? (
           <ErrorBanner message={locationError} onRetry={locate} />
@@ -102,25 +107,25 @@ export default function EmergencySOS() {
         {fix ? (
           <>
             <View style={styles.coordBlock}>
-              <Text style={styles.coordLabel}>Latitude</Text>
+              <Text style={styles.coordLabel}>{t("sos.latitude")}</Text>
               <Text style={styles.coordValue} selectable>
                 {fix.latitude.toFixed(6)}
               </Text>
             </View>
             <View style={styles.coordBlock}>
-              <Text style={styles.coordLabel}>Longitude</Text>
+              <Text style={styles.coordLabel}>{t("sos.longitude")}</Text>
               <Text style={styles.coordValue} selectable>
                 {fix.longitude.toFixed(6)}
               </Text>
             </View>
             <Text style={styles.fixMeta}>
               {fix.accuracy !== null
-                ? `Accurate to about ${Math.round(fix.accuracy)} m - `
+                ? `${t("sos.accuracy", { meters: Math.round(fix.accuracy) })} - `
                 : ""}
               {formatDateTime(fix.at)}
             </Text>
             <Button
-              title={copied ? "Copied" : "Copy location"}
+              title={copied ? t("home.copied") : t("sos.copyLocation")}
               icon={copied ? "check" : "content_copy"}
               onPress={copyLocation}
               tone="emergency"
@@ -129,12 +134,12 @@ export default function EmergencySOS() {
           </>
         ) : !locationError ? (
           <Text style={styles.locating}>
-            {locating ? "Finding your location..." : "No location yet."}
+            {locating ? t("sos.locating") : t("sos.noLocation")}
           </Text>
         ) : null}
 
         <Button
-          title="Refresh location"
+          title={t("sos.refresh")}
           onPress={locate}
           tone="neutral"
           variant="outline"
@@ -142,10 +147,7 @@ export default function EmergencySOS() {
         />
       </Card>
 
-      <Text style={styles.disclaimer}>
-        MedLink does not contact emergency services for you. Place the call yourself
-        and read out your location. Automatic alerting arrives in a later release.
-      </Text>
+      <Text style={styles.disclaimer}>{t("sos.disclaimer")}</Text>
     </Screen>
   );
 }

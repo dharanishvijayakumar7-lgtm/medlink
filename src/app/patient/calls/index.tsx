@@ -7,13 +7,21 @@ import { EmptyState, ErrorBanner, Loading, Screen, SoftBadge } from "@/component
 import { api, CallSummary } from "@/lib/api";
 import { formatCallDuration, urgencyMeta } from "@/lib/calls";
 import { formatDateTime } from "@/lib/format";
+import { translate, useT } from "@/lib/i18n";
 import { usePatientSession } from "@/lib/patient-session";
 import { colors, elevation, radius, spacing, type } from "@/lib/theme";
+import { useTranslated } from "@/lib/use-translated";
 
 function CallCard({ call, onPress }: { call: CallSummary; onPress: () => void }) {
+  const { t } = useT();
   const urgency = urgencyMeta(call.urgency);
   const duration = formatCallDuration(call.duration_sec);
-  const title = call.assessment?.category ?? call.chief_complaint ?? "Call to MedLink";
+  const {
+    texts: [title, summary],
+  } = useTranslated([
+    call.assessment?.category ?? call.chief_complaint ?? "",
+    call.summary_text ?? "",
+  ]);
 
   return (
     <Pressable
@@ -27,10 +35,10 @@ function CallCard({ call, onPress }: { call: CallSummary; onPress: () => void })
         </View>
         <View style={styles.cardHeading}>
           <Text style={styles.cardTitle} numberOfLines={2}>
-            {title}
+            {title || t("callDetail.fallbackTitle")}
           </Text>
           <Text style={styles.cardMeta}>
-            {call.started_at ? formatDateTime(call.started_at) : "Date not known"}
+            {call.started_at ? formatDateTime(call.started_at) : t("callDetail.dateUnknown")}
             {duration ? ` · ${duration}` : ""}
           </Text>
         </View>
@@ -39,7 +47,7 @@ function CallCard({ call, onPress }: { call: CallSummary; onPress: () => void })
       {urgency ? <SoftBadge label={urgency.label} tone={urgency.tone} /> : null}
       {call.summary_text ? (
         <Text style={styles.summary} numberOfLines={2}>
-          {call.summary_text}
+          {summary}
         </Text>
       ) : null}
     </Pressable>
@@ -50,6 +58,7 @@ function CallCard({ call, onPress }: { call: CallSummary; onPress: () => void })
 export default function CallHistory() {
   const router = useRouter();
   const { session } = usePatientSession();
+  const { t } = useT();
   const code = session?.unique_code ?? "";
 
   const [calls, setCalls] = useState<CallSummary[] | null>(null);
@@ -63,7 +72,7 @@ export default function CallHistory() {
       setCalls(await api.getPatientCalls(code));
       setError(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not load your calls.");
+      setError(caught instanceof Error ? caught.message : translate("calls.loadFailed"));
     }
   }, [code]);
 
@@ -79,7 +88,7 @@ export default function CallHistory() {
     setRefreshing(false);
   }
 
-  if (calls === null && !error) return <Loading label="Loading your calls..." />;
+  if (calls === null && !error) return <Loading label={t("calls.loading")} />;
 
   const lastFour = session?.phone.replace(/\D/g, "").slice(-4);
 
@@ -88,8 +97,9 @@ export default function CallHistory() {
       <View style={styles.explainer}>
         <Icon name="support_agent" size={22} color={colors.patient} />
         <Text style={styles.explainerText}>
-          Calls to the MedLink helpline from your registered number
-          {lastFour ? ` ending ${lastFour}` : ""}.
+          {lastFour
+            ? t("calls.explainerEnding", { digits: lastFour })
+            : t("calls.explainer")}
         </Text>
       </View>
 
@@ -98,8 +108,8 @@ export default function CallHistory() {
       {calls === null ? null : calls.length === 0 ? (
         <EmptyState
           icon="phone_in_talk"
-          title="No calls yet"
-          body="When you call the MedLink helpline from your registered number, a summary of the call appears here."
+          title={t("calls.emptyTitle")}
+          body={t("calls.emptyBody")}
         />
       ) : (
         calls.map((call) => (

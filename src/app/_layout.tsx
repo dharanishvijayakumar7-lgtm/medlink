@@ -11,6 +11,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
+import { LanguageProvider } from "@/lib/i18n";
 import { colors } from "@/lib/theme";
 
 // Installs LiveKit's WebRTC globals, or records that this build has none (Expo
@@ -46,22 +47,25 @@ export default function RootLayout() {
   return (
     // Needed by the gesture-handler Pressable the doctor queue uses.
     <GestureHandlerRootView style={{ flex: 1 }}>
-      {/* Role select has a light background; each role stack sets its own. */}
-      <StatusBar style="dark" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.bg },
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Screen name="patient" />
-        <Stack.Screen name="doctor" />
-        <Stack.Screen
-          name="call"
-          options={{ presentation: "fullScreenModal", gestureEnabled: false }}
-        />
-      </Stack>
+      {/* The language picked on role select, for every screen below. */}
+      <LanguageProvider>
+        {/* Role select has a light background; each role stack sets its own. */}
+        <StatusBar style="dark" />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: colors.bg },
+          }}
+        >
+          <Stack.Screen name="index" />
+          <Stack.Screen name="patient" />
+          <Stack.Screen name="doctor" />
+          <Stack.Screen
+            name="call"
+            options={{ presentation: "fullScreenModal", gestureEnabled: false }}
+          />
+        </Stack>
+      </LanguageProvider>
     </GestureHandlerRootView>
   );
 }

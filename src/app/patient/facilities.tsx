@@ -6,6 +6,7 @@ import { Icon } from "@/components/icon";
 import { EmptyState, ErrorBanner, Loading, Screen } from "@/components/ui";
 import { api, Facility, StockItem } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
+import { translate, useT } from "@/lib/i18n";
 import { colors, elevation, radius, spacing, type } from "@/lib/theme";
 
 const ALL = "All";
@@ -15,6 +16,7 @@ function countAvailable(items: StockItem[]) {
 }
 
 function StockList({ items }: { items: StockItem[] }) {
+  const { t } = useT();
   return (
     <View style={styles.stockList}>
       {items.map((item) => (
@@ -36,7 +38,7 @@ function StockList({ items }: { items: StockItem[] }) {
               { color: item.available ? colors.success : colors.warning },
             ]}
           >
-            {item.available ? "In stock" : "Out"}
+            {item.available ? t("facilities.inStock") : t("facilities.out")}
           </Text>
         </View>
       ))}
@@ -45,6 +47,7 @@ function StockList({ items }: { items: StockItem[] }) {
 }
 
 function FacilityCard({ facility }: { facility: Facility }) {
+  const { t } = useT();
   const [open, setOpen] = useState(false);
 
   const medicines = facility.stock.filter((item) => item.item_type === "medicine");
@@ -79,13 +82,19 @@ function FacilityCard({ facility }: { facility: Facility }) {
             <View style={styles.stockBadge}>
               <Icon name="medication" size={16} color={colors.onPrimaryContainer} />
               <Text style={styles.stockBadgeText}>
-                Medicines {countAvailable(medicines)}/{medicines.length}
+                {t("facilities.medicinesCount", {
+                  available: countAvailable(medicines),
+                  total: medicines.length,
+                })}
               </Text>
             </View>
             <View style={styles.stockBadgeAlt}>
               <Icon name="vaccines" size={16} color={colors.onSecondaryContainer} />
               <Text style={styles.stockBadgeAltText}>
-                Tests {countAvailable(diagnostics)}/{diagnostics.length}
+                {t("facilities.testsCount", {
+                  available: countAvailable(diagnostics),
+                  total: diagnostics.length,
+                })}
               </Text>
             </View>
           </View>
@@ -94,19 +103,19 @@ function FacilityCard({ facility }: { facility: Facility }) {
             <>
               {medicines.length > 0 ? (
                 <>
-                  <Text style={styles.groupLabel}>MEDICINES</Text>
+                  <Text style={styles.groupLabel}>{t("timeline.medicines")}</Text>
                   <StockList items={medicines} />
                 </>
               ) : null}
               {diagnostics.length > 0 ? (
                 <>
-                  <Text style={styles.groupLabel}>TESTS AND DIAGNOSTICS</Text>
+                  <Text style={styles.groupLabel}>{t("facilities.testsLabel")}</Text>
                   <StockList items={diagnostics} />
                 </>
               ) : null}
               {lastUpdated ? (
                 <Text style={styles.updated}>
-                  Stock updated {formatDateTime(lastUpdated)}
+                  {t("facilities.stockUpdated", { time: formatDateTime(lastUpdated) })}
                 </Text>
               ) : null}
             </>
@@ -123,18 +132,19 @@ function FacilityCard({ facility }: { facility: Facility }) {
               color={colors.patient}
             />
             <Text style={styles.expandText}>
-              {open ? "Hide what is available" : "See what is available"}
+              {open ? t("facilities.hideAvailable") : t("facilities.seeAvailable")}
             </Text>
           </Pressable>
         </>
       ) : (
-        <Text style={styles.noStock}>No stock information yet.</Text>
+        <Text style={styles.noStock}>{t("facilities.noStock")}</Text>
       )}
     </View>
   );
 }
 
 export default function NearbyFacilities() {
+  const { t } = useT();
   const [facilities, setFacilities] = useState<Facility[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -147,7 +157,7 @@ export default function NearbyFacilities() {
       setError(null);
     } catch (caught) {
       setError(
-        caught instanceof Error ? caught.message : "Could not load nearby facilities.",
+        caught instanceof Error ? caught.message : translate("facilities.loadFailed"),
       );
     } finally {
       setLoading(false);
@@ -175,19 +185,17 @@ export default function NearbyFacilities() {
   const visible =
     filter === ALL ? facilities : facilities.filter((item) => item.type === filter);
 
-  if (loading && facilities.length === 0) return <Loading label="Loading facilities..." />;
+  if (loading && facilities.length === 0) return <Loading label={t("facilities.loading")} />;
 
   return (
     <Screen refreshing={loading} onRefresh={refresh} contentStyle={styles.content}>
       <View style={styles.locationBanner}>
         <View style={styles.locationRow}>
           <Icon name="location_on" size={20} color={colors.patient} />
-          <Text style={styles.locationText}>Government health network</Text>
+          <Text style={styles.locationText}>{t("facilities.network")}</Text>
         </View>
-        <Text style={styles.bannerTitle}>Nearest medical centres to you</Text>
-        <Text style={styles.bannerBody}>
-          Check what is in stock before you travel.
-        </Text>
+        <Text style={styles.bannerTitle}>{t("facilities.bannerTitle")}</Text>
+        <Text style={styles.bannerBody}>{t("facilities.bannerBody")}</Text>
       </View>
 
       <ScrollView
@@ -198,7 +206,7 @@ export default function NearbyFacilities() {
         {types.map((option) => {
           const selected = option === filter;
           const label =
-            option === ALL ? `All (${facilities.length})` : option;
+            option === ALL ? t("facilities.all", { count: facilities.length }) : option;
           return (
             <Pressable
               key={option}
@@ -226,8 +234,8 @@ export default function NearbyFacilities() {
 
       {visible.length === 0 ? (
         <EmptyState
-          title="No facilities found"
-          body="Pull down to refresh."
+          title={t("facilities.emptyTitle")}
+          body={t("facilities.emptyBody")}
           icon="local_hospital"
         />
       ) : (

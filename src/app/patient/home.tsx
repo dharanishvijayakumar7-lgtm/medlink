@@ -7,7 +7,8 @@ import { DateOfBirthPrompt } from "@/components/date-of-birth-prompt";
 import { Icon } from "@/components/icon";
 import { Badge, ErrorBanner, Loading, Screen } from "@/components/ui";
 import { api, Consultation, PatientRecord } from "@/lib/api";
-import { ageShort } from "@/lib/format";
+import { ageShort, genderLabel } from "@/lib/format";
+import { translate, useT } from "@/lib/i18n";
 import { usePatientSession } from "@/lib/patient-session";
 import { dismissDobPrompt, isDobPromptDismissed } from "@/lib/storage";
 import { colors, elevation, overlay, radius, spacing, touch, type } from "@/lib/theme";
@@ -56,6 +57,7 @@ function ActionTile({
 export default function PatientHome() {
   const router = useRouter();
   const { session, forget } = usePatientSession();
+  const { t } = useT();
 
   const [record, setRecord] = useState<PatientRecord | null>(null);
   const [pending, setPending] = useState<Consultation | null>(null);
@@ -74,7 +76,7 @@ export default function PatientHome() {
       setRecord(await api.getPatientRecord(code));
       setError(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not load your record.");
+      setError(caught instanceof Error ? caught.message : translate("home.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -124,7 +126,7 @@ export default function PatientHome() {
         token: pending.token,
         serverUrl: pending.livekit_url,
         roomName: pending.room_name,
-        peerName: `Dr. ${pending.doctor_name}`,
+        peerName: t("common.doctorName", { name: pending.doctor_name }),
         consultationId: String(pending.id),
         role: "patient",
       },
@@ -132,7 +134,7 @@ export default function PatientHome() {
   }
 
   if (loading && !record) {
-    return <Loading label="Loading your record..." />;
+    return <Loading label={t("home.loading")} />;
   }
 
   const flagged = record?.notes.find((note) => note.is_high_risk) ?? null;
@@ -148,8 +150,8 @@ export default function PatientHome() {
         {record ? (
           <Text style={styles.unit}>{record.village.toUpperCase()}</Text>
         ) : null}
-        <Text style={styles.name} numberOfLines={1}>
-          Namaste, {record?.name ?? "there"}
+        <Text style={styles.name} numberOfLines={2}>
+          {t("home.greeting", { name: record?.name ?? t("home.greetingFallback") })}
         </Text>
       </View>
 
@@ -165,11 +167,13 @@ export default function PatientHome() {
             <Icon name="videocam" size={28} color={colors.onSuccess} />
           </View>
           <View style={styles.callBody}>
-            <Text style={styles.callTitle}>Dr. {pending.doctor_name} is ready</Text>
-            <Text style={styles.callSubtitle}>Tap to join your consultation now</Text>
+            <Text style={styles.callTitle}>
+              {t("home.callReady", { name: pending.doctor_name })}
+            </Text>
+            <Text style={styles.callSubtitle}>{t("home.callTap")}</Text>
           </View>
           <View style={styles.callAction}>
-            <Text style={styles.callActionText}>Join</Text>
+            <Text style={styles.callActionText}>{t("home.join")}</Text>
           </View>
         </Pressable>
       ) : null}
@@ -179,9 +183,9 @@ export default function PatientHome() {
         <View style={styles.idHeader}>
           <View style={styles.idHeaderLeft}>
             <Icon name="badge" size={20} color={colors.patient} />
-            <Text style={styles.idLabel}>Digital Health Identity</Text>
+            <Text style={styles.idLabel}>{t("home.idLabel")}</Text>
           </View>
-          <Badge label="VERIFIED" tone="patient" />
+          <Badge label={t("home.verified")} tone="patient" />
         </View>
         <View style={styles.idRow}>
           <View style={styles.idBody}>
@@ -190,13 +194,14 @@ export default function PatientHome() {
             </Text>
             {record ? (
               <Text style={styles.idMeta} numberOfLines={1}>
-                {record.name} · {ageShort(record.age_label)} · {record.gender}
+                {record.name} · {ageShort(record.age_label)} ·{" "}
+                {genderLabel(record.gender)}
               </Text>
             ) : null}
           </View>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Copy Health ID"
+            accessibilityLabel={t("home.copyId")}
             onPress={copyCode}
             style={({ pressed }) => [styles.copyButton, pressed && styles.pressed]}
           >
@@ -205,7 +210,7 @@ export default function PatientHome() {
               size={20}
               color={colors.patient}
             />
-            <Text style={styles.copyText}>{copied ? "Copied" : "Copy"}</Text>
+            <Text style={styles.copyText}>{copied ? t("home.copied") : t("home.copy")}</Text>
           </Pressable>
         </View>
       </View>
@@ -218,7 +223,7 @@ export default function PatientHome() {
           hitSlop={12}
         >
           <Icon name="cake" size={18} color={colors.patient} />
-          <Text style={styles.addDobText}>Add your date of birth</Text>
+          <Text style={styles.addDobText}>{t("dob.title")}</Text>
         </Pressable>
       ) : null}
 
@@ -245,12 +250,10 @@ export default function PatientHome() {
           </View>
         </View>
         <View style={styles.primaryFlag}>
-          <Text style={styles.primaryFlagText}>GUIDED SYMPTOM ASSESSMENT</Text>
+          <Text style={styles.primaryFlagText}>{t("home.symptomFlag")}</Text>
         </View>
-        <Text style={styles.primaryTitle}>Start Symptom Check</Text>
-        <Text style={styles.primaryBody}>
-          Answer a few questions about how you feel. A doctor reviews every answer.
-        </Text>
+        <Text style={styles.primaryTitle}>{t("home.symptomTitle")}</Text>
+        <Text style={styles.primaryBody}>{t("home.symptomBody")}</Text>
       </Pressable>
 
       {/* Live queue position */}
@@ -260,12 +263,14 @@ export default function PatientHome() {
             <Icon name="schedule" size={28} color={colors.patient} />
           </View>
           <View style={styles.snapshotBody}>
-            <Text style={styles.snapshotLabel}>Your place in the queue</Text>
-            <Text style={styles.snapshotValue}>Number {position}</Text>
+            <Text style={styles.snapshotLabel}>{t("home.queueLabel")}</Text>
+            <Text style={styles.snapshotValue}>
+              {t("home.queueNumber", { position })}
+            </Text>
             <Text style={styles.snapshotMeta}>
               {position === 1
-                ? "You are next. Keep your phone nearby."
-                : `${position - 1} ${position === 2 ? "person is" : "people are"} ahead of you.`}
+                ? t("home.queueNext")
+                : t("home.queueAhead", { count: position - 1 })}
             </Text>
           </View>
         </View>
@@ -275,13 +280,15 @@ export default function PatientHome() {
         <View style={styles.flagCard}>
           <Icon name="warning" size={28} color={colors.warning} />
           <View style={styles.flagBody}>
-            <Text style={styles.flagTitle}>A doctor flagged you for follow-up</Text>
+            <Text style={styles.flagTitle}>{t("home.flaggedTitle")}</Text>
             <Text style={styles.flagText}>
               {flagged.high_risk_reason?.trim()
                 ? flagged.high_risk_reason
-                : "Open My record for the full note."}
+                : t("home.flaggedFallback")}
             </Text>
-            <Text style={styles.flagMeta}>Dr. {flagged.doctor.name}</Text>
+            <Text style={styles.flagMeta}>
+              {t("common.doctorName", { name: flagged.doctor.name })}
+            </Text>
           </View>
         </View>
       ) : null}
@@ -290,16 +297,16 @@ export default function PatientHome() {
       <View style={styles.tileRow}>
         <ActionTile
           icon="folder_shared"
-          title="My Record"
-          subtitle="Past visits & notes"
+          title={t("home.recordTitle")}
+          subtitle={t("home.recordSubtitle")}
           tint={colors.patientTint}
           iconColor={colors.patient}
           onPress={() => router.push("/patient/record")}
         />
         <ActionTile
           icon="local_hospital"
-          title="Facilities"
-          subtitle="Clinics & hospitals"
+          title={t("home.facilitiesTitle")}
+          subtitle={t("home.facilitiesSubtitle")}
           tint={colors.secondaryContainer}
           iconColor={colors.doctor}
           onPress={() => router.push("/patient/facilities")}
@@ -316,10 +323,8 @@ export default function PatientHome() {
           <Icon name="description" size={28} color={colors.patient} />
         </View>
         <View style={styles.wideTileBody}>
-          <Text style={styles.tileTitle}>My Documents</Text>
-          <Text style={styles.tileSubtitle}>
-            Upload records from other hospitals
-          </Text>
+          <Text style={styles.tileTitle}>{t("home.documentsTitle")}</Text>
+          <Text style={styles.tileSubtitle}>{t("home.documentsSubtitle")}</Text>
         </View>
         <Icon name="chevron_right" size={24} color={colors.faint} />
       </Pressable>
@@ -334,10 +339,8 @@ export default function PatientHome() {
           <Icon name="phone_in_talk" size={28} color={colors.patient} />
         </View>
         <View style={styles.wideTileBody}>
-          <Text style={styles.tileTitle}>Call History</Text>
-          <Text style={styles.tileSubtitle}>
-            Summaries of your calls to MedLink
-          </Text>
+          <Text style={styles.tileTitle}>{t("home.callsTitle")}</Text>
+          <Text style={styles.tileSubtitle}>{t("home.callsSubtitle")}</Text>
         </View>
         <Icon name="chevron_right" size={24} color={colors.faint} />
       </Pressable>
@@ -349,10 +352,8 @@ export default function PatientHome() {
             <Icon name="emergency" size={32} color={colors.onEmergency} />
           </View>
           <View style={styles.sosBody}>
-            <Text style={styles.sosTitle}>EMERGENCY SOS</Text>
-            <Text style={styles.sosText}>
-              Open for the emergency number and your exact location
-            </Text>
+            <Text style={styles.sosTitle}>{t("home.sosTitle")}</Text>
+            <Text style={styles.sosText}>{t("home.sosText")}</Text>
           </View>
         </View>
         <Pressable
@@ -362,17 +363,17 @@ export default function PatientHome() {
         >
           <Icon name="call" size={28} color={colors.emergency} />
           <Text style={styles.sosButtonText}>
-            Emergency help ({EMERGENCY_NUMBER})
+            {t("home.sosButton", { number: EMERGENCY_NUMBER })}
           </Text>
         </Pressable>
         <View style={styles.sosFooter}>
-          <Text style={styles.sosFooterText}>Toll-free government hotline</Text>
-          <Text style={styles.sosFooterText}>GPS location shown</Text>
+          <Text style={styles.sosFooterText}>{t("home.sosHotline")}</Text>
+          <Text style={styles.sosFooterText}>{t("home.sosGps")}</Text>
         </View>
       </View>
 
       <Pressable onPress={startOver} style={styles.startOver} hitSlop={12}>
-        <Text style={styles.startOverText}>Not you? Register a different patient</Text>
+        <Text style={styles.startOverText}>{t("home.startOver")}</Text>
       </Pressable>
     </Screen>
   );

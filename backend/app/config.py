@@ -47,6 +47,13 @@ class Settings(BaseSettings):
     firestore_database: str = "(default)"
     firestore_timeout_seconds: float = 10.0
 
+    # Bhashini translates the app's text into Indian languages. The user id and
+    # API key come from the Bhashini dashboard; the pipeline id defaults to
+    # MeitY's public pipeline. The app never sees any of these.
+    bhashini_user_id: str = ""
+    bhashini_api_key: str = ""
+    bhashini_pipeline_id: str = "64392f96daac500b55c543cd"
+
     # Uploaded PDFs live on local disk for the hackathon. Move this to real
     # object storage before anything beyond a demo.
     uploads_dir: Path = BACKEND_DIR / "uploads"
@@ -64,6 +71,10 @@ class Settings(BaseSettings):
     @property
     def gemini_configured(self) -> bool:
         return bool(self.gemini_api_key)
+
+    @property
+    def bhashini_configured(self) -> bool:
+        return bool(self.bhashini_user_id and self.bhashini_api_key)
 
     @property
     def firebase_configured(self) -> bool:

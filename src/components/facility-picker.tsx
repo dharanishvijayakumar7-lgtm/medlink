@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Icon } from "@/components/icon";
 import { FacilitySummary } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 import { colors, radius, spacing, touch, type } from "@/lib/theme";
 
 /** A collapsible single-select list of facilities. No picker dependency. */
@@ -12,7 +13,7 @@ export function FacilityPicker({
   selectedId,
   onSelect,
   hint,
-  emptyLabel = "None",
+  emptyLabel,
   allowNone = true,
 }: {
   label: string;
@@ -23,6 +24,8 @@ export function FacilityPicker({
   emptyLabel?: string;
   allowNone?: boolean;
 }) {
+  const { t } = useT();
+  const noneLabel = emptyLabel ?? t("facilityPicker.none");
   const [open, setOpen] = useState(false);
   const selected = facilities.find((facility) => facility.id === selectedId) ?? null;
 
@@ -42,7 +45,7 @@ export function FacilityPicker({
           style={[styles.value, !selected && styles.placeholder]}
           numberOfLines={1}
         >
-          {selected ? selected.name : emptyLabel}
+          {selected ? selected.name : noneLabel}
         </Text>
         <Icon
           name={open ? "expand_less" : "expand_more"}
@@ -62,7 +65,7 @@ export function FacilityPicker({
               style={styles.row}
             >
               <View style={[styles.radio, selectedId === null && styles.radioOn]} />
-              <Text style={styles.rowText}>{emptyLabel}</Text>
+              <Text style={styles.rowText}>{noneLabel}</Text>
             </Pressable>
           ) : null}
 

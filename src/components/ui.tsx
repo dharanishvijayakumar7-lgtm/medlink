@@ -27,6 +27,7 @@ import {
 } from "react-native";
 
 import { Icon } from "@/components/icon";
+import { useT } from "@/lib/i18n";
 import { colors, elevation, radius, spacing, touch, type } from "@/lib/theme";
 
 export type Tone =
@@ -334,19 +335,26 @@ export function TextField({
   );
 }
 
-/** Filter toggles and single-select options. Pills are allowed here. */
+/**
+ * Filter toggles and single-select options. Pills are allowed here.
+ *
+ * `options` are the values that are saved; `optionLabel` turns one into the
+ * text shown, so a value can stay English while the chip is translated.
+ */
 export function ChoiceChips({
   label,
   options,
   value,
   onChange,
   tone = "patient",
+  optionLabel = (option) => option,
 }: {
   label?: string;
   options: readonly string[];
   value: string | null;
   onChange: (next: string) => void;
   tone?: Tone;
+  optionLabel?: (option: string) => string;
 }) {
   const { base } = TONES[tone];
   return (
@@ -372,7 +380,7 @@ export function ChoiceChips({
                   selected && { color: TONES[tone].on },
                 ]}
               >
-                {option}
+                {optionLabel(option)}
               </Text>
             </Pressable>
           );
@@ -388,12 +396,14 @@ export function MultiChoiceChips({
   values,
   onChange,
   tone = "patient",
+  optionLabel = (option) => option,
 }: {
   label?: string;
   options: readonly string[];
   values: string[];
   onChange: (next: string[]) => void;
   tone?: Tone;
+  optionLabel?: (option: string) => string;
 }) {
   const { base, on } = TONES[tone];
   const toggle = (option: string) =>
@@ -422,7 +432,7 @@ export function MultiChoiceChips({
             >
               {selected ? <Icon name="check" size={16} color={on} /> : null}
               <Text style={[styles.chipText, selected && { color: on }]}>
-                {option}
+                {optionLabel(option)}
               </Text>
             </Pressable>
           );
@@ -510,13 +520,14 @@ export function ErrorBanner({
   message: string;
   onRetry?: () => void;
 }) {
+  const { t } = useT();
   return (
     <View style={styles.errorBanner}>
       <Icon name="warning" size={22} color={colors.warning} />
       <View style={styles.errorBody}>
         <Text style={styles.errorText}>{message}</Text>
         {onRetry ? (
-          <LinkButton title="Try again" onPress={onRetry} tone="warning" />
+          <LinkButton title={t("common.tryAgain")} onPress={onRetry} tone="warning" />
         ) : null}
       </View>
     </View>

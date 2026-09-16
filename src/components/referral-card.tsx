@@ -4,29 +4,31 @@ import { Icon } from "@/components/icon";
 import { Badge, toneColor, Tone } from "@/components/ui";
 import { Referral, ReferralStatus } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
+import { TranslationKey, useT } from "@/lib/i18n";
 import { colors, elevation, radius, spacing, type } from "@/lib/theme";
 
-type StatusMeta = { label: string; patientLabel: string; tone: Tone };
+/** `label` and `patientLabel` are translation keys. */
+type StatusMeta = { label: TranslationKey; patientLabel: TranslationKey; tone: Tone };
 
 export const REFERRAL_STATUS_META: Record<ReferralStatus, StatusMeta> = {
   PENDING: {
-    label: "Pending",
-    patientLabel: "Waiting for the facility to confirm",
+    label: "referral.pending",
+    patientLabel: "referral.pendingPatient",
     tone: "warning",
   },
   CONFIRMED: {
-    label: "Confirmed",
-    patientLabel: "Confirmed - go when you can",
+    label: "referral.confirmed",
+    patientLabel: "referral.confirmedPatient",
     tone: "doctor",
   },
   COMPLETED: {
-    label: "Completed",
-    patientLabel: "Visit completed",
+    label: "referral.completed",
+    patientLabel: "referral.completedPatient",
     tone: "success",
   },
   NO_SHOW: {
-    label: "No show",
-    patientLabel: "You did not attend - contact the facility",
+    label: "referral.noShow",
+    patientLabel: "referral.noShowPatient",
     tone: "warning",
   },
 };
@@ -35,13 +37,12 @@ export const REFERRAL_STATUS_META: Record<ReferralStatus, StatusMeta> = {
 const STEPS: ReferralStatus[] = ["PENDING", "CONFIRMED", "COMPLETED"];
 
 function StatusTracker({ status }: { status: ReferralStatus }) {
+  const { t } = useT();
   if (status === "NO_SHOW") {
     return (
       <View style={styles.noShow}>
         <Icon name="event_busy" size={20} color={colors.warning} />
-        <Text style={styles.noShowText}>
-          Marked as not attended. Contact the facility to arrange another visit.
-        </Text>
+        <Text style={styles.noShowText}>{t("referral.noShowNote")}</Text>
       </View>
     );
   }
@@ -63,7 +64,7 @@ function StatusTracker({ status }: { status: ReferralStatus }) {
               ) : null}
             </View>
             <Text style={[styles.stepLabel, done && styles.stepLabelDone]}>
-              {REFERRAL_STATUS_META[step].label}
+              {t(REFERRAL_STATUS_META[step].label)}
             </Text>
           </View>
         );
@@ -82,6 +83,7 @@ export function ReferralCard({
   /** Doctor-side status controls, rendered under the tracker. */
   children?: React.ReactNode;
 }) {
+  const { t } = useT();
   const meta = REFERRAL_STATUS_META[referral.status];
 
   return (
@@ -91,10 +93,10 @@ export function ReferralCard({
           <Icon name="local_hospital" size={24} color={colors.doctor} />
         </View>
         <View style={styles.heading}>
-          <Text style={styles.category}>REFERRAL</Text>
+          <Text style={styles.category}>{t("referral.category")}</Text>
           <Text style={styles.facility}>{referral.to_facility.name}</Text>
         </View>
-        <Badge label={meta.label.toUpperCase()} tone={meta.tone} />
+        <Badge label={t(meta.label).toUpperCase()} tone={meta.tone} />
       </View>
 
       <Text style={styles.meta}>
@@ -103,7 +105,7 @@ export function ReferralCard({
 
       {audience === "patient" ? (
         <Text style={[styles.statusLine, { color: toneColor(meta.tone) }]}>
-          {meta.patientLabel}
+          {t(meta.patientLabel)}
         </Text>
       ) : null}
 
@@ -111,14 +113,16 @@ export function ReferralCard({
 
       {referral.notes ? (
         <View style={styles.notes}>
-          <Text style={styles.notesLabel}>REFERRAL NOTE</Text>
+          <Text style={styles.notesLabel}>{t("referral.noteLabel")}</Text>
           <Text style={styles.notesBody}>{referral.notes}</Text>
         </View>
       ) : null}
 
       <Text style={styles.author}>
-        Referred by Dr. {referral.doctor.name} · updated{" "}
-        {formatDateTime(referral.updated_at)}
+        {t("referral.author", {
+          name: referral.doctor.name,
+          time: formatDateTime(referral.updated_at),
+        })}
       </Text>
 
       {children}

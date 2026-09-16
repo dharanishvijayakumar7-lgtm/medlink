@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { View } from "react-native";
 
 import { Loading } from "@/components/ui";
+import { useT } from "@/lib/i18n";
 import { usePatientSession } from "@/lib/patient-session";
 import { colors } from "@/lib/theme";
 
@@ -13,6 +14,7 @@ import { colors } from "@/lib/theme";
 export default function PatientEntry() {
   const router = useRouter();
   const { session, loading } = usePatientSession();
+  const { t } = useT();
 
   useEffect(() => {
     if (loading) return;
@@ -21,7 +23,7 @@ export default function PatientEntry() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      <Loading label="Opening MedLink..." />
+      <Loading label={t("patient.opening")} />
     </View>
   );
 }

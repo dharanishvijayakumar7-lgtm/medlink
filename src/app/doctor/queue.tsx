@@ -13,6 +13,7 @@ import { QueueCard } from "@/components/queue-card";
 import { EmptyState, ErrorBanner, Loading, Screen } from "@/components/ui";
 import { api, FollowUpItem, QueueItem, TriageStatus } from "@/lib/api";
 import { useDoctorSession } from "@/lib/doctor-session";
+import { translate, TranslationKey, useT } from "@/lib/i18n";
 import { colors, overlay, radius, spacing, touch, type } from "@/lib/theme";
 
 const ALL = "All";
@@ -25,11 +26,18 @@ const FILTER_TO_STATUS: Record<string, TriageStatus | null> = {
   Done: "DONE",
 };
 
-const NAV_ACTIONS: { label: string; icon: string; href: string }[] = [
-  { label: "High-risk", icon: "warning", href: "/doctor/high-risk" },
-  { label: "Search ID", icon: "search", href: "/doctor/search" },
-  { label: "Stock", icon: "inventory_2", href: "/doctor/stock" },
-  { label: "Dashboard", icon: "monitoring", href: "/doctor/dashboard" },
+const FILTER_LABEL: Record<string, TranslationKey> = {
+  [ALL]: "queue.filterAll",
+  Waiting: "status.waiting",
+  "In progress": "status.inProgress",
+  Done: "status.done",
+};
+
+const NAV_ACTIONS: { label: TranslationKey; icon: string; href: string }[] = [
+  { label: "queue.navHighRisk", icon: "warning", href: "/doctor/high-risk" },
+  { label: "queue.navSearch", icon: "search", href: "/doctor/search" },
+  { label: "queue.navStock", icon: "inventory_2", href: "/doctor/stock" },
+  { label: "queue.navDashboard", icon: "monitoring", href: "/doctor/dashboard" },
 ];
 
 function Metric({ label, value, accent }: { label: string; value: string; accent: string }) {
@@ -44,6 +52,7 @@ function Metric({ label, value, accent }: { label: string; value: string; accent
 export default function DoctorQueue() {
   const router = useRouter();
   const { doctor } = useDoctorSession();
+  const { t } = useT();
 
   const [items, setItems] = useState<QueueItem[]>([]);
   const [followUps, setFollowUps] = useState<FollowUpItem[]>([]);
@@ -69,7 +78,7 @@ export default function DoctorQueue() {
       setFollowUps(due);
       setError(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not load the queue.");
+      setError(caught instanceof Error ? caught.message : translate("queue.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -89,7 +98,7 @@ export default function DoctorQueue() {
         await load();
       } catch (caught) {
         setError(
-          caught instanceof Error ? caught.message : "Could not update the status.",
+          caught instanceof Error ? caught.message : translate("queue.updateFailed"),
         );
       } finally {
         setBusyEntry(null);
@@ -122,12 +131,12 @@ export default function DoctorQueue() {
         <View style={styles.facilityPill}>
           <View style={styles.liveDot} />
           <Text style={styles.facilityText} numberOfLines={1}>
-            {doctor.facility ? doctor.facility.name : "Tele-clinic"}
+            {doctor.facility ? doctor.facility.name : t("queue.teleClinic")}
           </Text>
         </View>
         <View style={styles.liveRow}>
           <Icon name="sync" size={16} color={colors.muted} />
-          <Text style={styles.liveText}>Live</Text>
+          <Text style={styles.liveText}>{t("queue.live")}</Text>
         </View>
       </View>
 
@@ -136,34 +145,34 @@ export default function DoctorQueue() {
         <View style={styles.heroTop}>
           <View style={styles.heroHeading}>
             <View style={styles.heroLabelRow}>
-              <Text style={styles.heroLabel}>TRIAGE DESK</Text>
+              <Text style={styles.heroLabel}>{t("queue.triageDesk")}</Text>
               <View style={styles.heroDoctorPill}>
                 <Text style={styles.heroDoctorText} numberOfLines={1}>
-                  Dr. {doctor.name}
+                  {t("common.doctorName", { name: doctor.name })}
                 </Text>
               </View>
             </View>
-            <Text style={styles.heroTitle}>Patient Triage Queue</Text>
+            <Text style={styles.heroTitle}>{t("queue.title")}</Text>
           </View>
           <View style={styles.heroCount}>
             <Text style={styles.heroCountValue}>{counts.waiting}</Text>
-            <Text style={styles.heroCountLabel}>In waiting</Text>
+            <Text style={styles.heroCountLabel}>{t("queue.inWaiting")}</Text>
           </View>
         </View>
 
         <View style={styles.metricStrip}>
           <Metric
-            label="High risk"
+            label={t("queue.metricHighRisk")}
             value={`${counts.highRisk}`}
             accent={colors.tertiaryFixed}
           />
           <Metric
-            label="From phone"
+            label={t("queue.metricPhone")}
             value={`${counts.fromPhone}`}
             accent={colors.onPrimary}
           />
           <Metric
-            label="Follow-ups due"
+            label={t("queue.metricFollowUps")}
             value={`${followUps.length}`}
             accent={colors.primaryFixed}
           />
@@ -174,7 +183,7 @@ export default function DoctorQueue() {
       <View style={styles.navRow}>
         {NAV_ACTIONS.map((action) => (
           <Pressable
-            key={action.label}
+            key={action.href}
             accessibilityRole="button"
             // TEMP DEBUG: confirms the tap now completes.
             onPressIn={() => console.log("[debug] pressIn", action.label)}
@@ -185,7 +194,7 @@ export default function DoctorQueue() {
             style={({ pressed }) => [styles.navAction, pressed && styles.pressed]}
           >
             <Icon name={action.icon} size={22} color={colors.doctor} />
-            <Text style={styles.navActionText}>{action.label}</Text>
+            <Text style={styles.navActionText}>{t(action.label)}</Text>
           </Pressable>
         ))}
       </View>
@@ -196,9 +205,8 @@ export default function DoctorQueue() {
         <>
           <View style={styles.noticeBar}>
             <Icon name="emergency_home" size={20} color={colors.warning} />
-            <Text style={styles.noticeText} numberOfLines={1}>
-              {followUps.length} follow-up{followUps.length === 1 ? "" : "s"} awaiting
-              review
+            <Text style={styles.noticeText} numberOfLines={2}>
+              {t("queue.followUpsAwaiting", { count: followUps.length })}
             </Text>
           </View>
           {followUps.map((item) => (
@@ -239,7 +247,7 @@ export default function DoctorQueue() {
               style={[styles.filterPill, selected && styles.filterPillOn]}
             >
               <Text style={[styles.filterText, selected && styles.filterTextOn]}>
-                {option}
+                {t(FILTER_LABEL[option])}
               </Text>
               <View style={[styles.filterCount, selected && styles.filterCountOn]}>
                 <Text
@@ -254,16 +262,16 @@ export default function DoctorQueue() {
       </ScrollView>
 
       {loading && items.length === 0 ? (
-        <Loading label="Loading queue..." />
+        <Loading label={t("queue.loading")} />
       ) : visible.length === 0 ? (
         <EmptyState
           icon="inbox"
-          title={filter === ALL ? "Queue is empty" : `Nobody is ${filter.toLowerCase()}`}
-          body={
+          title={
             filter === ALL
-              ? "Patients appear here after a symptom check, in the app or over the phone."
-              : "Try a different filter."
+              ? t("queue.emptyTitle")
+              : t("queue.emptyFiltered", { status: t(FILTER_LABEL[filter]) })
           }
+          body={filter === ALL ? t("queue.emptyBody") : t("queue.emptyFilteredBody")}
         />
       ) : (
         visible.map((item) => (

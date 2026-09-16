@@ -47,3 +47,22 @@ export async function isDobPromptDismissed(uniqueCode: string): Promise<boolean>
 export async function dismissDobPrompt(uniqueCode: string): Promise<void> {
   await AsyncStorage.setItem(DOB_PROMPT_KEY + uniqueCode, "1");
 }
+
+// --- App language ------------------------------------------------------------
+//
+// Chosen on the role select screen, before any role or patient exists, so it
+// belongs to the device rather than to a patient.
+
+const LANGUAGE_KEY = "medlink.language";
+
+export async function loadLanguage(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(LANGUAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export async function saveLanguage(code: string): Promise<void> {
+  await AsyncStorage.setItem(LANGUAGE_KEY, code);
+}

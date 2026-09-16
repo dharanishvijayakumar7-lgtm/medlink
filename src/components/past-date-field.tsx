@@ -4,6 +4,7 @@ import { Platform, Pressable, StyleSheet, Text, TextInput, View } from "react-na
 
 import { Icon } from "@/components/icon";
 import { formatIsoDate, isValidIsoDate, toIsoDate } from "@/lib/format";
+import { useT } from "@/lib/i18n";
 import { colors, radius, spacing, touch, type } from "@/lib/theme";
 
 const EARLIEST = new Date(1900, 0, 1);
@@ -47,6 +48,7 @@ export function PastDateField({
   /** Shows a Clear action, for optional fields. */
   onClear?: () => void;
 }) {
+  const { t } = useT();
   const [showIos, setShowIos] = useState(false);
   const [webDraft, setWebDraft] = useState(value ?? "");
   const today = new Date();
@@ -117,7 +119,7 @@ export function PastDateField({
             onValueChange={(_event, picked) => onChange(toIsoDate(picked))}
           />
           <Pressable onPress={() => setShowIos(false)} style={styles.iosDone} hitSlop={12}>
-            <Text style={styles.iosDoneText}>Done</Text>
+            <Text style={styles.iosDoneText}>{t("common.done")}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -139,7 +141,7 @@ export function PastDateField({
             }}
             hitSlop={12}
           >
-            <Text style={styles.clear}>Clear</Text>
+            <Text style={styles.clear}>{t("common.clear")}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -153,7 +155,7 @@ export function DateOfBirthField({
   onChange,
   requirement,
   error,
-  label = "Date of birth",
+  label,
 }: {
   value: string | null;
   onChange: (next: string) => void;
@@ -161,16 +163,17 @@ export function DateOfBirthField({
   error?: string | null;
   label?: string;
 }) {
+  const { t } = useT();
   return (
     <PastDateField
       value={value}
       onChange={onChange}
-      label={label}
+      label={label ?? t("dob.label")}
       requirement={requirement}
       error={error}
       icon="cake"
-      placeholder="Tap to choose date of birth"
-      hint="Used to work out your age at every visit. Check your Aadhaar card if unsure."
+      placeholder={t("dob.placeholder")}
+      hint={t("dob.hint")}
       // Opening on today would make an elderly patient scroll back decades.
       openYearsAgo={30}
     />

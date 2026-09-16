@@ -9,17 +9,12 @@ Gemini is used for this document-vision task only. It sits alongside the voice
 agent's own providers and replaces none of them.
 """
 
-import logging
 from dataclasses import dataclass
 
-from google import genai
-from google.genai import errors as genai_errors
 from google.genai import types
 from pydantic import BaseModel, Field
 
-from app.config import settings
-
-logger = logging.getLogger("medlink.extraction")
+from app.gemini import GeminiFailed, GeminiNotConfigured, generate_json
 
 
 # --- Output shape -------------------------------------------------------------
@@ -138,71 +133,26 @@ class ExtractionResult:
     model: str
 
 
-# Quota exhaustion - worth retrying on the next model rather than giving up.
-_RETRYABLE_STATUS = {429, 500, 503, 504}
-
-
-def _models() -> list[str]:
-    ordered = [settings.gemini_model, settings.gemini_fallback_model]
-    return [m for i, m in enumerate(ordered) if m and m not in ordered[:i]]
-
-
 def extract_summary(pdf_bytes: bytes) -> ExtractionResult:
-    """Send the PDF to Gemini and return the parsed summary.
-
-    Tries the primary model first and moves to the fallback only when the
-    primary is rate-limited or temporarily unavailable, so a free-tier quota
-    running out degrades to a lighter model instead of failing the upload.
-    """
-    if not settings.gemini_configured:
-        raise ExtractionNotConfigured(
-            "GEMINI_API_KEY is not set in backend/.env, so documents cannot be read."
-        )
-
-    client = genai.Client(api_key=settings.gemini_api_key)
-    config = types.GenerateContentConfig(
-        system_instruction=SYSTEM_INSTRUCTION,
-        response_mime_type="application/json",
-        response_schema=ExtractedSummary,
-        temperature=0.1,
-        # No tools are involved; switching this off also silences the SDK's
-        # automatic-function-calling warning on every request.
-        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-    )
+    """Send the PDF to Gemini and return the parsed summary."""
     contents = [
         types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
         USER_PROMPT,
     ]
+    try:
+        result = generate_json(
+            system_instruction=SYSTEM_INSTRUCTION,
+            contents=contents,
+            schema=ExtractedSummary,
+            task="extraction",
+        )
+    except GeminiNotConfigured as error:
+        raise ExtractionNotConfigured(
+            "GEMINI_API_KEY is not set in backend/.env, so documents cannot be read."
+        ) from error
+    except GeminiFailed as error:
+        raise ExtractionFailed(
+            "We could not read this document right now. Please try again later."
+        ) from error
 
-    last_error: Exception | None = None
-    for model in _models():
-        try:
-            response = client.models.generate_content(
-                model=model, contents=contents, config=config
-            )
-        except genai_errors.APIError as error:
-            last_error = error
-            if error.code in _RETRYABLE_STATUS:
-                logger.warning("extraction on %s unavailable (%s), trying next", model, error.code)
-                continue
-            logger.error("extraction on %s rejected: %s", model, error.code)
-            break
-
-        parsed = response.parsed
-        if isinstance(parsed, ExtractedSummary):
-            return ExtractionResult(summary=parsed, model=model)
-
-        # Structured output normally parses; fall back to validating the text.
-        text = response.text or ""
-        try:
-            return ExtractionResult(
-                summary=ExtractedSummary.model_validate_json(text), model=model
-            )
-        except ValueError as error:
-            last_error = error
-            logger.error("extraction on %s returned unparseable output", model)
-            continue
-
-    raise ExtractionFailed(
-        "We could not read this document right now. Please try again later."
-    ) from last_error
+    return ExtractionResult(summary=result.parsed, model=result.model)

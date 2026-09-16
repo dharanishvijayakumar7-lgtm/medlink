@@ -20,14 +20,29 @@ import {
   TriageEntry,
   TriageStatus,
 } from "@/lib/api";
-import { ageShort, formatDateTime, formatIsoDate } from "@/lib/format";
+import {
+  ageShort,
+  formatDateTime,
+  formatIsoDate,
+  genderLabel,
+  languageLabel,
+} from "@/lib/format";
+import { translate, TranslationKey, useT } from "@/lib/i18n";
 import { usePatientSession } from "@/lib/patient-session";
+import { useLocalizedSymptomTexts } from "@/lib/symptom-text";
 import { colors, elevation, radius, spacing, type } from "@/lib/theme";
 
-const TRIAGE_STATUS_META: Record<TriageStatus, { label: string; tone: Tone }> = {
-  WAITING: { label: "WAITING", tone: "warning" },
-  IN_PROGRESS: { label: "WITH A DOCTOR", tone: "doctor" },
-  DONE: { label: "REVIEWED", tone: "success" },
+const TRIAGE_STATUS_META: Record<TriageStatus, { label: TranslationKey; tone: Tone }> = {
+  WAITING: { label: "status.waitingShort", tone: "warning" },
+  IN_PROGRESS: { label: "record.withDoctor", tone: "doctor" },
+  DONE: { label: "record.reviewed", tone: "success" },
+};
+
+/** The result the patient was shown after the check. */
+const URGENCY_META: Record<string, { label: TranslationKey; tone: Tone }> = {
+  EMERGENCY: { label: "symptom.result.emergencyTitle", tone: "emergency" },
+  SEE_DOCTOR_SOON: { label: "symptom.result.soonTitle", tone: "warning" },
+  HOME_CARE: { label: "symptom.result.homeTitle", tone: "success" },
 };
 
 /** One chronological stream, as the Health Timeline mockup shows. */
@@ -73,24 +88,33 @@ function EntryCard({
 }
 
 function TriageBlock({ entry }: { entry: TriageEntry }) {
+  const { t } = useT();
   const [expanded, setExpanded] = useState(false);
   const meta = TRIAGE_STATUS_META[entry.status];
+  const urgency = entry.urgency ? URGENCY_META[entry.urgency] : undefined;
+
+  // Saved in English; shown in the app's language.
+  const [summary, ...answerTexts] = useLocalizedSymptomTexts([
+    entry.summary,
+    ...entry.answers.flatMap((answer) => [answer.question, answer.answer]),
+  ]);
 
   return (
-    <EntryCard icon="monitor_heart" category="SYMPTOM CHECK" title={entry.summary}>
+    <EntryCard icon="monitor_heart" category={t("timeline.kind.triage")} title={summary}>
       <View style={styles.chipRow}>
-        <SoftBadge label={meta.label} tone={meta.tone} />
+        <SoftBadge label={t(meta.label)} tone={meta.tone} />
         {entry.source === "voice_call" ? (
-          <SoftBadge label="PHONE CALL" tone="neutral" />
+          <SoftBadge label={t("record.phoneCall")} tone="neutral" />
         ) : null}
+        {urgency ? <SoftBadge label={t(urgency.label)} tone={urgency.tone} /> : null}
       </View>
 
       {expanded ? (
         <View style={styles.answers}>
-          {entry.answers.map((answer, position) => (
+          {entry.answers.map((_, position) => (
             <View key={`${entry.id}-${position}`} style={styles.answerRow}>
-              <Text style={styles.answerQuestion}>{answer.question}</Text>
-              <Text style={styles.answerValue}>{answer.answer}</Text>
+              <Text style={styles.answerQuestion}>{answerTexts[position * 2]}</Text>
+              <Text style={styles.answerValue}>{answerTexts[position * 2 + 1]}</Text>
             </View>
           ))}
         </View>
@@ -99,7 +123,9 @@ function TriageBlock({ entry }: { entry: TriageEntry }) {
       {entry.answers.length > 0 ? (
         <Pressable onPress={() => setExpanded(!expanded)} hitSlop={12}>
           <Text style={styles.toggle}>
-            {expanded ? "Hide answers" : `Show all ${entry.answers.length} answers`}
+            {expanded
+              ? t("record.hideAnswers")
+              : t("record.showAnswers", { count: entry.answers.length })}
           </Text>
         </Pressable>
       ) : null}
@@ -108,20 +134,23 @@ function TriageBlock({ entry }: { entry: TriageEntry }) {
 }
 
 function NoteBlock({ note }: { note: ConsultationNote }) {
+  const { t } = useT();
   return (
     <EntryCard
       icon="stethoscope"
-      category="DOCTOR NOTE"
-      title={note.is_high_risk ? "Follow-up advised" : "Clinical note"}
+      category={t("timeline.kind.note")}
+      title={note.is_high_risk ? t("record.followUpAdvised") : t("record.clinicalNote")}
     >
       <View style={styles.chipRow}>
-        {note.is_high_risk ? <SoftBadge label="HIGH RISK" tone="warning" /> : null}
+        {note.is_high_risk ? <SoftBadge label={t("common.highRisk")} tone="warning" /> : null}
         {note.follow_up_due_date ? (
           <SoftBadge
             label={
               note.follow_up_resolved
-                ? "FOLLOW-UP DONE"
-                : `DUE ${formatIsoDate(note.follow_up_due_date).toUpperCase()}`
+                ? t("record.followUpDone")
+                : t("record.due", {
+                    date: formatIsoDate(note.follow_up_due_date).toUpperCase(),
+                  })
             }
             tone={note.follow_up_resolved ? "success" : "warning"}
           />
@@ -131,7 +160,9 @@ function NoteBlock({ note }: { note: ConsultationNote }) {
       <View style={styles.quoteBox}>
         <View style={styles.quoteHead}>
           <Icon name="stethoscope" size={20} color={colors.patient} />
-          <Text style={styles.quoteDoctor}>Dr. {note.doctor.name}</Text>
+          <Text style={styles.quoteDoctor}>
+            {t("common.doctorName", { name: note.doctor.name })}
+          </Text>
           <Text style={styles.quoteRole}>· {note.doctor.specialization}</Text>
         </View>
         <Text style={styles.quoteText}>“{note.note_text}”</Text>
@@ -139,14 +170,14 @@ function NoteBlock({ note }: { note: ConsultationNote }) {
 
       {note.is_high_risk && note.high_risk_reason ? (
         <View style={styles.callout}>
-          <Text style={styles.calloutLabel}>REASON FOR FOLLOW-UP</Text>
+          <Text style={styles.calloutLabel}>{t("record.followUpReason")}</Text>
           <Text style={styles.calloutBody}>{note.high_risk_reason}</Text>
         </View>
       ) : null}
 
       {note.referred_to_facility ? (
         <View style={styles.callout}>
-          <Text style={styles.calloutLabel}>REFERRED TO</Text>
+          <Text style={styles.calloutLabel}>{t("timeline.referredTo")}</Text>
           <Text style={styles.calloutBody}>
             {note.referred_to_facility.name} ({note.referred_to_facility.type})
           </Text>
@@ -158,6 +189,7 @@ function NoteBlock({ note }: { note: ConsultationNote }) {
 
 export default function MyRecord() {
   const { session } = usePatientSession();
+  const { t } = useT();
   const [record, setRecord] = useState<PatientRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -171,7 +203,7 @@ export default function MyRecord() {
       setRecord(await api.getPatientRecord(code));
       setError(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not load your record.");
+      setError(caught instanceof Error ? caught.message : translate("home.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -203,7 +235,7 @@ export default function MyRecord() {
     return entries.sort((a, b) => (a.at < b.at ? 1 : -1));
   }, [record]);
 
-  if (loading && !record) return <Loading label="Loading your record..." />;
+  if (loading && !record) return <Loading label={t("home.loading")} />;
 
   return (
     <Screen refreshing={loading} onRefresh={load}>
@@ -212,10 +244,9 @@ export default function MyRecord() {
           <Icon name="history_edu" size={24} color={colors.onPatient} />
         </View>
         <View style={styles.headerBody}>
-          <Text style={styles.headerTitle}>Health Timeline</Text>
+          <Text style={styles.headerTitle}>{t("record.title")}</Text>
           <Text style={styles.headerSubtitle}>
-            {timeline.length} clinical{" "}
-            {timeline.length === 1 ? "entry" : "entries"}
+            {t("record.entries", { count: timeline.length })}
           </Text>
         </View>
       </View>
@@ -226,10 +257,14 @@ export default function MyRecord() {
         <View style={styles.patientCard}>
           <Text style={styles.patientName}>{record.name}</Text>
           <Text style={styles.patientMeta}>
-            {record.unique_code} · {ageShort(record.age_label)} · {record.gender}
+            {record.unique_code} · {ageShort(record.age_label)} ·{" "}
+            {genderLabel(record.gender)}
           </Text>
           <Text style={styles.patientMeta}>
-            {record.village} · {record.phone} · speaks {record.preferred_language}
+            {record.village} · {record.phone} ·{" "}
+            {t("record.speaks", {
+              language: languageLabel(record.preferred_language),
+            })}
           </Text>
         </View>
       ) : null}
@@ -237,8 +272,8 @@ export default function MyRecord() {
       {timeline.length === 0 ? (
         <EmptyState
           icon="history_edu"
-          title="Nothing on your timeline yet"
-          body="Run a symptom check from your home screen to start your record."
+          title={t("record.emptyTitle")}
+          body={t("record.emptyBody")}
         />
       ) : (
         timeline.map((item) => {

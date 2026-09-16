@@ -8,6 +8,7 @@ import { PastDateField } from "@/components/past-date-field";
 import { Button, Card, ErrorBanner, Screen, TextField } from "@/components/ui";
 import { api, PickedPdf } from "@/lib/api";
 import { formatFileSize } from "@/lib/format";
+import { useT } from "@/lib/i18n";
 import { usePatientSession } from "@/lib/patient-session";
 import { colors, radius, spacing, type } from "@/lib/theme";
 
@@ -19,6 +20,7 @@ type Picked = PickedPdf & { size?: number | null };
 export default function UploadDocument() {
   const router = useRouter();
   const { session } = usePatientSession();
+  const { t } = useT();
 
   const [file, setFile] = useState<Picked | null>(null);
   const [hospitalName, setHospitalName] = useState("");
@@ -38,7 +40,7 @@ export default function UploadDocument() {
 
     const asset = result.assets[0];
     if (asset.size && asset.size > MAX_BYTES) {
-      setError("This file is larger than 15 MB. Please choose a smaller PDF.");
+      setError(t("upload.tooLarge"));
       return;
     }
     setFile({ uri: asset.uri, name: asset.name, mimeType: asset.mimeType, size: asset.size });
@@ -60,7 +62,7 @@ export default function UploadDocument() {
         params: { id: String(document.id) },
       });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "The upload did not go through.");
+      setError(caught instanceof Error ? caught.message : t("upload.failed"));
       setUploading(false);
     }
   }
@@ -73,11 +75,8 @@ export default function UploadDocument() {
             <Icon name="upload_file" size={28} color={colors.patient} />
           </View>
           <View style={styles.introBody}>
-            <Text style={styles.introTitle}>Add a record from another hospital</Text>
-            <Text style={styles.introText}>
-              A discharge summary, prescription, or lab report as a PDF. One
-              document for each visit.
-            </Text>
+            <Text style={styles.introTitle}>{t("upload.introTitle")}</Text>
+            <Text style={styles.introText}>{t("upload.introText")}</Text>
           </View>
         </View>
       </Card>
@@ -96,12 +95,12 @@ export default function UploadDocument() {
             ) : null}
           </View>
           <Pressable accessibilityRole="button" onPress={pickFile} hitSlop={12}>
-            <Text style={styles.change}>Change</Text>
+            <Text style={styles.change}>{t("upload.change")}</Text>
           </Pressable>
         </View>
       ) : (
         <Button
-          title="Choose a PDF"
+          title={t("upload.choose")}
           icon="picture_as_pdf"
           onPress={pickFile}
           tone="patient"
@@ -110,39 +109,34 @@ export default function UploadDocument() {
       )}
 
       <Card style={styles.formCard}>
-        <Text style={styles.optionalNote}>
-          Both optional - MedLink will try to read them from the document.
-        </Text>
+        <Text style={styles.optionalNote}>{t("upload.optionalNote")}</Text>
         <TextField
-          label="Hospital or clinic name"
-          requirement="Optional"
+          label={t("upload.hospital")}
+          requirement={t("common.optional")}
           value={hospitalName}
           onChangeText={setHospitalName}
-          placeholder="e.g. District Hospital Chandauli"
+          placeholder={t("upload.hospitalPlaceholder")}
           autoCapitalize="words"
         />
         <PastDateField
-          label="Date of the visit"
-          requirement="Optional"
+          label={t("upload.visitDate")}
+          requirement={t("common.optional")}
           value={visitDate}
           onChange={setVisitDate}
           onClear={() => setVisitDate(null)}
           icon="event"
-          placeholder="Tap to choose the visit date"
-          hint="If you are not sure, leave it empty."
+          placeholder={t("upload.visitPlaceholder")}
+          hint={t("upload.visitHint")}
         />
       </Card>
 
       <View style={styles.timingNote}>
         <Icon name="schedule" size={20} color={colors.muted} />
-        <Text style={styles.timingText}>
-          Reading a document takes up to a minute. You can leave the screen while
-          it works.
-        </Text>
+        <Text style={styles.timingText}>{t("upload.timing")}</Text>
       </View>
 
       <Button
-        title="Upload and analyze"
+        title={t("upload.submit")}
         icon="cloud_upload"
         onPress={submit}
         loading={uploading}

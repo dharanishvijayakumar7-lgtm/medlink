@@ -140,8 +140,25 @@ class DoctorOut(BaseModel):
 
 
 class TriageAnswer(BaseModel):
+    # Stable question id from the app's symptom check ("complaint", "severity"
+    # ...). The safety rules read answers by it. The voice agent omits it.
+    id: str | None = None
     question: str
     answer: str
+
+
+class TriageAssessment(BaseModel):
+    """The symptom check result, in English. See app/triage_assessment.py."""
+
+    urgency: Literal["HOME_CARE", "SEE_DOCTOR_SOON", "EMERGENCY"]
+    red_flags: list[str] = []
+    possible_causes: list[str] = []
+    what_to_do: list[str] = []
+    danger_signs: list[str] = []
+    plain_summary: str
+    # "gemini" or "rules" - rules alone when Gemini was unavailable.
+    source: str
+    model: str | None = None
 
 
 class TriageEntryCreate(BaseModel):
@@ -158,6 +175,8 @@ class TriageEntryOut(BaseModel):
     answers: list[TriageAnswer]
     status: TriageStatus
     source: TriageSource
+    urgency: str | None = None
+    assessment: TriageAssessment | None = None
     created_at: datetime
 
 

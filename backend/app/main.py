@@ -29,6 +29,7 @@ from app.routers import (
     notes,
     patients,
     referrals,
+    translate,
     triage,
 )
 from app.schema_sync import sync_schema
@@ -58,6 +59,8 @@ async def lifespan(app: FastAPI):
 
     if not settings.gemini_configured:
         logger.warning("GEMINI_API_KEY not set - uploaded documents will fail to process.")
+    if not settings.bhashini_configured:
+        logger.warning("BHASHINI_* not set - /translate will return English unchanged.")
     if not settings.firebase_configured:
         logger.warning(
             "FIREBASE_CREDENTIALS_FILE not set or missing - call history will return 503."
@@ -93,6 +96,7 @@ app.include_router(consultations.router)
 app.include_router(notes.router)
 app.include_router(documents.router)
 app.include_router(calls.router)
+app.include_router(translate.router)
 
 
 @app.get("/health", tags=["meta"])
@@ -102,4 +106,5 @@ def health() -> dict[str, object]:
         "livekit_configured": settings.livekit_configured,
         "gemini_configured": settings.gemini_configured,
         "firebase_configured": settings.firebase_configured,
+        "bhashini_configured": settings.bhashini_configured,
     }

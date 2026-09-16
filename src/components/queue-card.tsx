@@ -5,25 +5,33 @@ import { Pressable } from "react-native-gesture-handler";
 import { Icon } from "@/components/icon";
 import { Badge, SoftBadge, Tone } from "@/components/ui";
 import { QueueItem, TriageStatus } from "@/lib/api";
-import { ageShort, timeAgo } from "@/lib/format";
+import { ageShort, genderLabel, timeAgo } from "@/lib/format";
+import { TranslationKey, useT } from "@/lib/i18n";
 import { colors, elevation, radius, spacing, touch, type } from "@/lib/theme";
 
+/** `label` and `short` are translation keys. */
 export const TRIAGE_STATUS_META: Record<
   TriageStatus,
-  { label: string; short: string; tone: Tone }
+  { label: TranslationKey; short: TranslationKey; tone: Tone }
 > = {
-  WAITING: { label: "Waiting", short: "WAITING", tone: "warning" },
-  IN_PROGRESS: { label: "In progress", short: "IN PROGRESS", tone: "doctor" },
-  DONE: { label: "Done", short: "DONE", tone: "success" },
+  WAITING: { label: "status.waiting", short: "status.waitingShort", tone: "warning" },
+  IN_PROGRESS: {
+    label: "status.inProgress",
+    short: "status.inProgressShort",
+    tone: "doctor",
+  },
+  DONE: { label: "status.done", short: "status.doneShort", tone: "success" },
 };
 
 /** The status a doctor would move to next, and the label for that button. */
-const NEXT_ACTION: Record<TriageStatus, { to: TriageStatus; label: string; icon: string }> =
-  {
-    WAITING: { to: "IN_PROGRESS", label: "Start consult", icon: "play_arrow" },
-    IN_PROGRESS: { to: "DONE", label: "Mark done", icon: "check" },
-    DONE: { to: "WAITING", label: "Reopen", icon: "restart_alt" },
-  };
+const NEXT_ACTION: Record<
+  TriageStatus,
+  { to: TriageStatus; label: TranslationKey; icon: string }
+> = {
+  WAITING: { to: "IN_PROGRESS", label: "queue.startConsult", icon: "play_arrow" },
+  IN_PROGRESS: { to: "DONE", label: "queue.markDone", icon: "check" },
+  DONE: { to: "WAITING", label: "queue.reopen", icon: "restart_alt" },
+};
 
 /**
  * Doctor patient-row card. The left edge is colour-coded by triage level, per
@@ -41,6 +49,7 @@ export function QueueCard({
   onSetStatus?: (entryId: number, status: TriageStatus) => void;
   busy?: boolean;
 }) {
+  const { t } = useT();
   const status = item.latest_triage_status;
   const statusMeta = status ? TRIAGE_STATUS_META[status] : null;
   const next = status ? NEXT_ACTION[status] : null;
@@ -61,14 +70,14 @@ export function QueueCard({
               {item.name}
             </Text>
             {item.is_high_risk ? (
-              <Badge label="HIGH RISK" tone="warning" icon="warning" />
+              <Badge label={t("common.highRisk")} tone="warning" icon="warning" />
             ) : null}
           </View>
 
           <View style={styles.badgeRow}>
             <Text style={styles.code}>{item.unique_code}</Text>
             {statusMeta ? (
-              <SoftBadge label={statusMeta.short} tone={statusMeta.tone} />
+              <SoftBadge label={t(statusMeta.short)} tone={statusMeta.tone} />
             ) : null}
             <View style={styles.sourceRow}>
               <Icon
@@ -77,13 +86,13 @@ export function QueueCard({
                 color={colors.muted}
               />
               <Text style={styles.sourceText}>
-                {fromPhone ? "Phone call" : "App"}
+                {fromPhone ? t("call.channel.phone") : t("queue.sourceApp")}
               </Text>
             </View>
           </View>
 
           <Text style={styles.meta}>
-            {ageShort(item.age_label)} · {item.gender} · {item.village}
+            {ageShort(item.age_label)} · {genderLabel(item.gender)} · {item.village}
           </Text>
 
           {item.latest_triage_summary ? (
@@ -91,17 +100,17 @@ export function QueueCard({
               {item.latest_triage_summary}
             </Text>
           ) : (
-            <Text style={styles.noTriage}>No symptom check submitted yet</Text>
+            <Text style={styles.noTriage}>{t("queue.noTriage")}</Text>
           )}
 
           <View style={styles.footer}>
             <Text style={styles.footerText}>
               {item.latest_triage_at
-                ? `Last check ${timeAgo(item.latest_triage_at)}`
-                : "Flagged by a doctor"}
+                ? t("queue.lastCheck", { time: timeAgo(item.latest_triage_at) })
+                : t("queue.flaggedByDoctor")}
             </Text>
             <Text style={styles.footerText}>
-              {item.note_count} note{item.note_count === 1 ? "" : "s"}
+              {t("queue.notes", { count: item.note_count })}
             </Text>
           </View>
         </Pressable>
@@ -118,7 +127,7 @@ export function QueueCard({
             ]}
           >
             <Icon name={next.icon} size={20} color={colors.doctor} />
-            <Text style={styles.statusActionText}>{next.label}</Text>
+            <Text style={styles.statusActionText}>{t(next.label)}</Text>
           </Pressable>
         ) : null}
       </View>
